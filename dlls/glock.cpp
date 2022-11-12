@@ -106,7 +106,7 @@ BOOL CGlock::Deploy()
 
 void CGlock::SecondaryAttack( void )
 {
-	GlockFire( 0.1, 0.2, FALSE );
+	//GlockFire( 0.1, 0.2, FALSE );
 }
 
 void CGlock::PrimaryAttack( void )
@@ -154,16 +154,7 @@ void CGlock::GlockFire( float flSpread, float flCycleTime, BOOL fUseAutoAim )
 	}
 
 	Vector vecSrc = m_pPlayer->GetGunPosition();
-	Vector vecAiming;
-
-	if( fUseAutoAim )
-	{
-		vecAiming = m_pPlayer->GetAutoaimVector( AUTOAIM_10DEGREES );
-	}
-	else
-	{
-		vecAiming = gpGlobals->v_forward;
-	}
+	Vector vecAiming = m_pPlayer->GetAutoaimVector( AUTOAIM_5DEGREES );
 
 	Vector vecDir;
 	vecDir = m_pPlayer->FireBulletsPlayer( 1, vecSrc, vecAiming, Vector( flSpread, flSpread, flSpread ), 8192, BULLET_PLAYER_9MM, 0, 0, m_pPlayer->pev, m_pPlayer->random_seed );
@@ -181,6 +172,8 @@ void CGlock::GlockFire( float flSpread, float flCycleTime, BOOL fUseAutoAim )
 
 void CGlock::Reload( void )
 {
+	CBasePlayerWeapon::Reload();
+
 	if( m_pPlayer->m_rgAmmo[m_iPrimaryAmmoType] <= 0 || m_iClip == GLOCK_MAX_CLIP )
 		return;
 

@@ -127,7 +127,7 @@ Directly queue up an event on the client
 =====================
 */
 void HUD_PlaybackEvent( int flags, const edict_t *pInvoker, unsigned short eventindex, float delay,
-	float *origin, float *angles, float fparam1, float fparam2, int iparam1, int iparam2, int bparam1, int bparam2 )
+	const float *origin, const float *angles, float fparam1, float fparam2, int iparam1, int iparam2, int bparam1, int bparam2 )
 {
 	vec3_t org;
 	vec3_t ang;
@@ -139,6 +139,29 @@ void HUD_PlaybackEvent( int flags, const edict_t *pInvoker, unsigned short event
 	org			= g_finalstate->playerstate.origin;
 	ang			= v_angles;
 	gEngfuncs.pfnPlaybackEvent( flags, pInvoker, eventindex, delay, (float *)&org, (float *)&ang, fparam1, fparam2, iparam1, iparam2, bparam1, bparam2 );
+}
+
+/*
+=====================
+HUD_CVarGetFloat
+
+get float cvar client
+=====================
+*/
+float HUD_CVarGetFloat( const char* szVarName )
+{
+	return gEngfuncs.pfnGetCvarFloat( szVarName );
+}
+
+
+/*
+=====================
+HUD_ServerCommand
+=====================
+*/
+void HUD_ServerCommand( const char* szVarName )
+{
+	gEngfuncs.pfnServerCmd( szVarName );
 }
 
 /*

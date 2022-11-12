@@ -123,7 +123,7 @@ BOOL CMP5::Deploy()
 void CMP5::PrimaryAttack()
 {
 	// don't fire underwater
-	if( m_pPlayer->pev->waterlevel == 3 )
+	if( m_pPlayer->IsWeaponUnderWater() )
 	{
 		PlayEmptySound();
 		m_flNextPrimaryAttack = 0.15;
@@ -150,6 +150,15 @@ void CMP5::PrimaryAttack()
 	Vector vecSrc = m_pPlayer->GetGunPosition();
 	Vector vecAiming = m_pPlayer->GetAutoaimVector( AUTOAIM_5DEGREES );
 	Vector vecDir;
+
+	//If stabiliased, reduce the spread
+	float stabilised = CVAR_GET_FLOAT("vr_weapon_stabilised");
+	float spread = 1.0f;
+	if (stabilised != 0.0f)
+	{
+		spread = 0.45f;
+	}
+
 #ifdef CLIENT_DLL
 	if( !bIsMultiplayer() )
 #else
@@ -157,12 +166,12 @@ void CMP5::PrimaryAttack()
 #endif
 	{
 		// optimized multiplayer. Widened to make it easier to hit a moving player
-		vecDir = m_pPlayer->FireBulletsPlayer( 1, vecSrc, vecAiming, VECTOR_CONE_6DEGREES, 8192, BULLET_PLAYER_MP5, 2, 0, m_pPlayer->pev, m_pPlayer->random_seed );
+		vecDir = m_pPlayer->FireBulletsPlayer( 1, vecSrc, vecAiming, VECTOR_CONE_6DEGREES * spread, 8192, BULLET_PLAYER_MP5, 2, 0, m_pPlayer->pev, m_pPlayer->random_seed );
 	}
 	else
 	{
 		// single player spread
-		vecDir = m_pPlayer->FireBulletsPlayer( 1, vecSrc, vecAiming, VECTOR_CONE_3DEGREES, 8192, BULLET_PLAYER_MP5, 2, 0, m_pPlayer->pev, m_pPlayer->random_seed );
+		vecDir = m_pPlayer->FireBulletsPlayer( 1, vecSrc, vecAiming, VECTOR_CONE_3DEGREES * spread, 8192, BULLET_PLAYER_MP5, 2, 0, m_pPlayer->pev, m_pPlayer->random_seed );
 	}
 
 	int flags;
@@ -188,7 +197,7 @@ void CMP5::PrimaryAttack()
 void CMP5::SecondaryAttack( void )
 {
 	// don't fire underwater
-	if( m_pPlayer->pev->waterlevel == 3 )
+	if( m_pPlayer->IsWeaponUnderWater() )
 	{
 		PlayEmptySound( );
 		m_flNextPrimaryAttack = 0.15;
@@ -212,12 +221,10 @@ void CMP5::SecondaryAttack( void )
 	// player "shoot" animation
 	m_pPlayer->SetAnimation( PLAYER_ATTACK1 );
 
- 	UTIL_MakeVectors( m_pPlayer->pev->v_angle + m_pPlayer->pev->punchangle );
+ 	UTIL_MakeVectors( m_pPlayer->GetWeaponViewAngles() );
 
 	// we don't add in player velocity anymore.
-	CGrenade::ShootContact( m_pPlayer->pev,
-					m_pPlayer->pev->origin + m_pPlayer->pev->view_ofs + gpGlobals->v_forward * 16, 
-					gpGlobals->v_forward * 800 );
+	CGrenade::ShootContact( m_pPlayer->pev, m_pPlayer->GetWeaponPosition() + gpGlobals->v_forward * 16, gpGlobals->v_forward * 800 );
 
 	int flags;
 #if defined( CLIENT_WEAPONS )
@@ -238,6 +245,8 @@ void CMP5::SecondaryAttack( void )
 
 void CMP5::Reload( void )
 {
+	CBasePlayerWeapon::Reload();
+
 	if( m_pPlayer->m_rgAmmo[m_iPrimaryAmmoType] <= 0 || m_iClip == MP5_MAX_CLIP )
 		return;
 

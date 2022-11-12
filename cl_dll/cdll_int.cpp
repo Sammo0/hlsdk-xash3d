@@ -22,6 +22,13 @@
 #include "cl_util.h"
 #include "netadr.h"
 #include "parsemsg.h"
+#include "vr_renderer.h"
+
+#if defined(GOLDSOURCE_SUPPORT) && (defined(_WIN32) || defined(__linux__) || defined(__APPLE__)) && (defined(__i386) || defined(_M_IX86))
+#define USE_VGUI_FOR_GOLDSOURCE_SUPPORT
+#include "VGUI_Panel.h"
+#include "VGUI_App.h"
+#endif
 
 extern "C"
 {
@@ -177,6 +184,46 @@ int *HUD_GetRect( void )
 	return extent;
 }
 
+#ifdef USE_VGUI_FOR_GOLDSOURCE_SUPPORT
+class TeamFortressViewport : public vgui::Panel
+{
+public:
+	TeamFortressViewport(int x,int y,int wide,int tall);
+	void Initialize( void );
+
+	virtual void paintBackground();
+	void *operator new( size_t stAllocateBlock );
+};
+
+static TeamFortressViewport* gViewPort = NULL;
+
+TeamFortressViewport::TeamFortressViewport(int x, int y, int wide, int tall) : Panel(x, y, wide, tall)
+{
+	gViewPort = this;
+	Initialize();
+}
+
+void TeamFortressViewport::Initialize()
+{
+	//vgui::App::getInstance()->setCursorOveride( vgui::App::getInstance()->getScheme()->getCursor(vgui::Scheme::scu_none) );
+}
+
+void TeamFortressViewport::paintBackground()
+{
+//	int wide, tall;
+//	getParent()->getSize( wide, tall );
+//	setSize( wide, tall );
+	gEngfuncs.VGui_ViewportPaintBackground(HUD_GetRect());
+}
+
+void *TeamFortressViewport::operator new( size_t stAllocateBlock )
+{
+	void *mem = ::operator new( stAllocateBlock );
+	memset( mem, 0, stAllocateBlock );
+	return mem;
+}
+#endif
+
 /*
 ==========================
 	HUD_VidInit
@@ -190,7 +237,25 @@ so the HUD can reinitialize itself.
 int DLLEXPORT HUD_VidInit( void )
 {
 	gHUD.VidInit();
+#ifdef USE_VGUI_FOR_GOLDSOURCE_SUPPORT
+	vgui::Panel* root=(vgui::Panel*)gEngfuncs.VGui_GetPanel();
+	if (root) {
+		gEngfuncs.Con_Printf( "Root VGUI panel exists\n" );
+		root->setBgColor(128,128,0,0);
 
+		if (gViewPort != NULL)
+		{
+			gViewPort->Initialize();
+		}
+		else
+		{
+			gViewPort = new TeamFortressViewport(0,0,root->getWide(),root->getTall());
+			gViewPort->setParent(root);
+		}
+	} else {
+		gEngfuncs.Con_Printf( "Root VGUI panel does not exist\n" );
+	}
+#endif
 	return 1;
 }
 
@@ -223,7 +288,8 @@ redraw the HUD.
 
 int DLLEXPORT HUD_Redraw( float time, int intermission )
 {
-	gHUD.Redraw( time, intermission );
+	gVRRenderer.InterceptHUDRedraw(time, intermission);
+	//gHUD.Redraw( time, intermission );
 
 	return 1;
 }
@@ -270,7 +336,15 @@ Called by engine every frame that client .dll is loaded
 */
 
 void DLLEXPORT HUD_Frame( double time )
-{	gEngfuncs.VGui_ViewportPaintBackground(HUD_GetRect());
+{
+#ifdef USE_VGUI_FOR_GOLDSOURCE_SUPPORT
+	if (!gViewPort)
+		gEngfuncs.VGui_ViewportPaintBackground(HUD_GetRect());
+#else
+	gEngfuncs.VGui_ViewportPaintBackground(HUD_GetRect());
+#endif
+
+	gVRRenderer.Frame(time);
 }
 
 /*
@@ -304,4 +378,24 @@ void DLLEXPORT HUD_MobilityInterface( mobile_engfuncs_t *gpMobileEngfuncs )
 	if( gpMobileEngfuncs->version != MOBILITY_API_VERSION )
 		return;
 	gMobileEngfuncs = gpMobileEngfuncs;
+}
+
+bool HUD_MessageBox( const char *msg )
+{
+	gEngfuncs.Con_Printf( msg ); // just in case
+
+	if( IsXashFWGS() )
+	{
+		gMobileEngfuncs->pfnSys_Warn( msg );
+		return true;
+	}
+
+	// TODO: Load SDL2 and call ShowSimpleMessageBox
+
+	return false;
+}
+
+bool IsXashFWGS()
+{
+	return gMobileEngfuncs != NULL;
 }

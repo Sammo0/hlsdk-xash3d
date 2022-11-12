@@ -365,7 +365,8 @@ public:
 	void Zap( const Vector &vecSrc, const Vector &vecDest );
 	void EXPORT StrikeUse( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value );
 	void EXPORT ToggleUse( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value );
-	
+
+	static CLightning *LightningCreate( const char *pSpriteName, int width );
 	inline BOOL ServerSide( void )
 	{
 		if( m_life == 0 && !( pev->spawnflags & SF_BEAM_RING ) )
@@ -380,8 +381,8 @@ public:
 	void BeamUpdateVars( void );
 
 	int	m_active;
-	int	m_iszStartEntity;
-	int	m_iszEndEntity;
+	string_t	m_iszStartEntity;
+	string_t	m_iszEndEntity;
 	float	m_life;
 	int	m_boltWidth;
 	int	m_noiseAmplitude;
@@ -389,7 +390,7 @@ public:
 	int	m_speed;
 	float	m_restrike;
 	int	m_spriteTexture;
-	int	m_iszSpriteName;
+	string_t	m_iszSpriteName;
 	int	m_frameStart;
 
 	float	m_radius;
@@ -910,6 +911,19 @@ void CLightning::BeamUpdateVars( void )
 		SetFlags( BEAM_FSHADEIN );
 	else if( pev->spawnflags & SF_BEAM_SHADEOUT )
 		SetFlags( BEAM_FSHADEOUT );
+}
+
+CLightning *CLightning::LightningCreate( const char *pSpriteName, int width )
+{
+	// Create a new entity with CLightning private data
+	CLightning *pBeam = GetClassPtr( (CLightning *)NULL );
+
+	pBeam->BeamInit( pSpriteName, width );
+	pBeam->pev->classname = MAKE_STRING( "env_beam" );
+	pBeam->m_iszSpriteName = MAKE_STRING( pSpriteName );
+	pBeam->m_boltWidth = width;
+
+	return pBeam;
 }
 
 LINK_ENTITY_TO_CLASS( env_laser, CLaser )
@@ -2181,6 +2195,8 @@ public:
 
 void CItemSoda::Precache( void )
 {
+	PRECACHE_MODEL( "models/can.mdl" );
+	PRECACHE_SOUND( "weapons/g_bounce3.wav" );
 }
 
 LINK_ENTITY_TO_CLASS( item_sodacan, CItemSoda )
@@ -2231,6 +2247,7 @@ void CItemSoda::CanTouch( CBaseEntity *pOther )
 	SetThink( &CBaseEntity::SUB_Remove );
 	pev->nextthink = gpGlobals->time;
 }
+
 
 //=================================================================
 // env_model: like env_sprite, except you can specify a sequence.
@@ -2833,4 +2850,5 @@ void CEnvLaserMirror::Think()
 	{
 		FireTargets( STRING( m_iszSnoozedTarget ), this, this, USE_TOGGLE, 0 );
 	}
+
 }

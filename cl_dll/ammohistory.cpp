@@ -111,7 +111,7 @@ int HistoryResource::DrawAmmoHistory( float flTime )
 	{
 		if( rgAmmoHistory[i].type )
 		{
-			rgAmmoHistory[i].DisplayTime = min( rgAmmoHistory[i].DisplayTime, gHUD.m_flTime + HISTORY_DRAW_TIME );
+			rgAmmoHistory[i].DisplayTime = Q_min( rgAmmoHistory[i].DisplayTime, gHUD.m_flTime + HISTORY_DRAW_TIME );
 
 			if( rgAmmoHistory[i].DisplayTime <= flTime )
 			{
@@ -127,11 +127,11 @@ int HistoryResource::DrawAmmoHistory( float flTime )
 				int r, g, b;
 				UnpackRGB( r, g, b, RGB_YELLOWISH );
 				float scale = ( rgAmmoHistory[i].DisplayTime - flTime ) * 80;
-				ScaleColors( r, g, b, min( scale, 255 ) );
+				ScaleColors( r, g, b, Q_min( scale, 255 ) );
 
 				// Draw the pic
-				int ypos = ScreenHeight - (AMMO_PICKUP_PICK_HEIGHT + (AMMO_PICKUP_GAP * i));
-				int xpos = ScreenWidth - 24;
+				int ypos = ScreenHeight - (AMMO_PICKUP_PICK_HEIGHT + (AMMO_PICKUP_GAP * i)) - (ScreenHeight / 3);
+				int xpos = (int)((ScreenWidth / 3) - 24 + CHudBase::GetStereoDepthOffset());
 				if( spr && *spr )    // weapon isn't loaded yet so just don't draw the pic
 				{
 					// the dll has to make sure it has sent info the weapons you need
@@ -158,10 +158,10 @@ int HistoryResource::DrawAmmoHistory( float flTime )
 					UnpackRGB( r, g, b, RGB_REDISH );	// if the weapon doesn't have ammo, display it as red
 
 				float scale = ( rgAmmoHistory[i].DisplayTime - flTime ) * 80;
-				ScaleColors( r, g, b, min( scale, 255 ) );
+				ScaleColors( r, g, b, Q_min( scale, 255 ) );
 
-				int ypos = ScreenHeight - ( AMMO_PICKUP_PICK_HEIGHT + ( AMMO_PICKUP_GAP * i ) );
-				int xpos = ScreenWidth - ( weap->rcInactive.right - weap->rcInactive.left );
+				int ypos = ScreenHeight - ( AMMO_PICKUP_PICK_HEIGHT + ( AMMO_PICKUP_GAP * i ) ) - (ScreenHeight / 3);
+				int xpos = (int)((ScreenWidth / 3)  - ( weap->rcInactive.right - weap->rcInactive.left ) + CHudBase::GetStereoDepthOffset());
 				SPR_Set( weap->hInactive, r, g, b );
 				SPR_DrawAdditive( 0, xpos, ypos, &weap->rcInactive );
 			}
@@ -176,10 +176,10 @@ int HistoryResource::DrawAmmoHistory( float flTime )
 
 				UnpackRGB( r, g, b, RGB_YELLOWISH );
 				float scale = ( rgAmmoHistory[i].DisplayTime - flTime ) * 80;
-				ScaleColors( r, g, b, min( scale, 255 ) );
+				ScaleColors( r, g, b, Q_min( scale, 255 ) );
 
-				int ypos = ScreenHeight - ( AMMO_PICKUP_PICK_HEIGHT + ( AMMO_PICKUP_GAP * i ) );
-				int xpos = ScreenWidth - ( rect.right - rect.left ) - 10;
+				int ypos = ScreenHeight - ( AMMO_PICKUP_PICK_HEIGHT + ( AMMO_PICKUP_GAP * i ) ) - (ScreenHeight / 3);
+				int xpos = (int)((ScreenWidth / 3) - ( rect.right - rect.left ) - 10 + CHudBase::GetStereoDepthOffset());
 
 				SPR_Set( gHUD.GetSprite( rgAmmoHistory[i].iId ), r, g, b );
 				SPR_DrawAdditive( 0, xpos, ypos, &rect );

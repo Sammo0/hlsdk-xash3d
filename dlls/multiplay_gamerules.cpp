@@ -1337,7 +1337,8 @@ int ReloadMapCycleFile( const char *filename, mapcycle_t *cycle )
 			hasbuffer = 0;
 
 			pFileList = COM_Parse( pFileList );
-			if( strlen( com_token ) <= 0 )
+
+			if( com_token[0] == '\0' )
 				break;
 
 			strcpy( szMap, com_token );
@@ -1346,7 +1347,8 @@ int ReloadMapCycleFile( const char *filename, mapcycle_t *cycle )
 			if( COM_TokenWaiting( pFileList ) )
 			{
 				pFileList = COM_Parse( pFileList );
-				if( strlen( com_token ) > 0 )
+
+				if( com_token[0] != '\0' )
 				{
 					hasbuffer = 1;
 					strcpy( szBuffer, com_token );
@@ -1502,7 +1504,8 @@ void ExtractCommandString( char *s, char *szCommand )
 		*o = 0;
 
 		strcat( szCommand, pkey );
-		if( strlen( value ) > 0 )
+
+		if( value[0] != '\0' )
 		{
 			strcat( szCommand, " " );
 			strcat( szCommand, value );
@@ -1669,13 +1672,15 @@ void CHalfLifeMultiplay::ChangeLevel( void )
 	{
 		ALERT( at_console, "PLAYER COUNT:  min %i max %i current %i\n", minplayers, maxplayers, curplayers );
 	}
-	if( strlen( szRules ) > 0 )
+
+	if( szRules[0] != '\0' )
 	{
 		ALERT( at_console, "RULES:  %s\n", szRules );
 	}
 
 	CHANGE_LEVEL( szNextMap, NULL );
-	if( strlen( szCommands ) > 0 )
+
+	if( szCommands[0] != '\0' )
 	{
 		SERVER_COMMAND( szCommands );
 	}
@@ -1688,8 +1693,8 @@ void CHalfLifeMultiplay::SendMOTDToClient( edict_t *client )
 {
 	// read from the MOTD.txt file
 	int length, char_count = 0;
-	const char *pFileList;
-	const char *aFileList = pFileList = (const char*)LOAD_FILE_FOR_ME( CVAR_GET_STRING( "motdfile" ), &length );
+	char *pFileList;
+	char *aFileList = pFileList = (char*)LOAD_FILE_FOR_ME( CVAR_GET_STRING( "motdfile" ), &length );
 
 	// send the server name
 	MESSAGE_BEGIN( MSG_ONE, gmsgServerName, NULL, client );
@@ -1717,10 +1722,10 @@ void CHalfLifeMultiplay::SendMOTDToClient( edict_t *client )
 		if( char_count < MAX_MOTD_LENGTH )
 			pFileList = aFileList + char_count; 
 		else
-			pFileList = 0;
+			*pFileList = 0;
 
 		MESSAGE_BEGIN( MSG_ONE, gmsgMOTD, NULL, client );
-			WRITE_BYTE( pFileList ? FALSE : TRUE );	// FALSE means there is still more message to come
+			WRITE_BYTE( *pFileList ? FALSE : TRUE );	// FALSE means there is still more message to come
 			WRITE_STRING( chunk );
 		MESSAGE_END();
 	}

@@ -12,7 +12,7 @@ but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 */
-
+#pragma once
 #ifndef COM_MODEL_H
 #define COM_MODEL_H
 
@@ -29,6 +29,9 @@ typedef vec_t		vec4_t[4];
 */
 #define STUDIO_RENDER	1
 #define STUDIO_EVENTS	2
+
+//Probably shouldn't do this.. but adding a flag to indicate we are rendering the weapon
+#define STUDIO_VIEWMODEL	4
 
 #define ZISCALE		((float)0x8000)
 

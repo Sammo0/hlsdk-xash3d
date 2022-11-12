@@ -15,6 +15,9 @@
 //  Vector.h
 // A subset of the extdll.h in the project HL Entity DLL
 //
+#pragma once
+#ifndef UTIL_VECTOR_H
+#define UTIL_VECTOR_H
 
 // Misc C-runtime library headers
 #include "stdio.h"
@@ -23,7 +26,7 @@
 
 // Header file containing definition of globalvars_t and entvars_t
 typedef unsigned int func_t;					//
-typedef unsigned int string_t;				// from engine's pr_comp.h;
+typedef int string_t;				// from engine's pr_comp.h;
 typedef float vec_t;				// needed before including progdefs.h
 
 //=========================================================
@@ -71,7 +74,7 @@ class Vector						// same data-layout as engine's vec3_t,
 {								//which is a vec_t[3]
 public:
 	// Construction/destruction
-	inline Vector( void )					{ }
+	inline Vector( void )					{ x = 0.0f; y = 0.0f; z = 0.0f; }
 	inline Vector( float X, float Y, float Z )		{ x = X; y = Y; z = Z; }
 	inline Vector( double X, double Y, double Z )		{ x = (float)X; y = (float)Y; z = (float)Z; }
 	inline Vector( int X, int Y, int Z )			{ x = (float)X; y = (float)Y; z = (float)Z; }
@@ -124,3 +127,4 @@ inline float DotProduct( const Vector& a, const Vector& b) { return( a.x * b.x +
 inline Vector CrossProduct(const Vector& a, const Vector& b) { return Vector( a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x ); }
 
 #define vec3_t Vector
+#endif // UTIL_VECTOR_H

@@ -38,7 +38,7 @@ public:
 
 private:
 	int m_iStyle;
-	int m_iszPattern;
+	string_t m_iszPattern;
 };
 
 LINK_ENTITY_TO_CLASS( light, CLight )
@@ -155,10 +155,10 @@ void CEnvLight::KeyValue( KeyValueData* pkvd )
 		}
 		else if( j == 4 )
 		{
-			v /= 255;
-			r *= v;
-			g *= v;
-			b *= v;
+			float vf = v / 255.0f;
+			r *= vf;
+			g *= vf;
+			b *= vf;
 		}
 
 		// simulate qrad direct, ambient,and gamma adjustments, as well as engine scaling

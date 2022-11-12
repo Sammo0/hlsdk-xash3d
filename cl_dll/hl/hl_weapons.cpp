@@ -32,6 +32,8 @@
 #include "../com_weapons.h"
 #include "../demo.h"
 
+#include "vr_renderer.h"
+
 extern globalvars_t *gpGlobals;
 extern int g_iUser1;
 
@@ -261,7 +263,9 @@ Put away weapon
 =====================
 */
 void CBasePlayerWeapon::Holster( int skiplocal /* = 0 */ )
-{ 
+{
+	KillLaser();
+
 	m_fInReload = FALSE; // cancel any reload in progress.
 	g_irunninggausspred = false;
 	m_pPlayer->pev->viewmodel = 0; 
@@ -314,6 +318,118 @@ Vector CBaseEntity::FireBulletsPlayer ( ULONG cShots, Vector vecSrc, Vector vecD
 	}
 
 	return Vector( x * vecSpread.x, y * vecSpread.y, 0.0 );
+}
+
+void CBasePlayerWeapon::Reload( void )
+{
+	//Just stop the laser aim
+	KillLaser();
+}
+
+
+#ifndef CLIENT_DLL
+LINK_ENTITY_TO_CLASS( laser_sight, CLaserSight )
+LINK_ENTITY_TO_CLASS( laser_sight_spot, CLaserSpot )
+
+
+//=========================================================
+//=========================================================
+CLaserSight *CLaserSight::CreateLaserSight()
+{
+	CLaserSight *pLaser = GetClassPtr( (CLaserSight *)NULL );
+	pLaser->Spawn();
+
+	pLaser->pev->classname = MAKE_STRING( "laser_sight" );
+
+	return pLaser;
+}
+
+//=========================================================
+//=========================================================
+void CLaserSight::Spawn( void )
+{
+	BeamInit( g_pModelNameLaser, 3 );
+	pev->movetype = MOVETYPE_NONE;
+	pev->solid = SOLID_NOT;
+}
+#endif
+
+void CBasePlayerWeapon::KillLaser( void )
+{
+#ifndef CLIENT_DLL
+	if( m_pLaser)
+	{
+		m_pLaser->Killed( NULL, GIB_NEVER );
+		m_pLaser = NULL;
+	}
+	if( m_pLaserSpot)
+	{
+		m_pLaserSpot->Killed( NULL, GIB_NEVER );
+		m_pLaserSpot = NULL;
+	}
+#endif
+}
+
+
+void CBasePlayerWeapon::MakeLaser( void )
+{
+#ifndef CLIENT_DLL
+    if (CVAR_GET_FLOAT("vr_lasersight") == 0.0f) {
+        KillLaser();
+		return;
+	}
+	else if (CVAR_GET_FLOAT("vr_lasersight") == 1.0f) {
+        if( m_pLaserSpot)
+        {
+            m_pLaserSpot->Killed( NULL, GIB_NEVER );
+            m_pLaserSpot = NULL;
+        }
+
+		TraceResult tr;
+		Vector vecSrc = m_pPlayer->GetGunPosition();
+		Vector vecAiming = m_pPlayer->GetAutoaimVector(AUTOAIM_5DEGREES);
+		Vector vecEnd;
+		vecEnd = vecSrc + vecAiming * 2048;
+		UTIL_TraceLine(vecSrc, vecEnd, dont_ignore_monsters, ENT(pev), &tr);
+
+		float flBeamLength = tr.flFraction;
+
+		// set to follow laser spot
+		Vector vecTmpEnd = vecSrc + vecAiming * 2048 * flBeamLength;
+		if (!m_pLaser || !(m_pLaser->pev)) {
+			m_pLaser = CLaserSight::CreateLaserSight();
+		}
+
+		m_pLaser->PointsInit(vecSrc, vecTmpEnd);
+		m_pLaser->SetColor(214, 34, 34);
+		m_pLaser->SetScrollRate(255);
+		m_pLaser->SetBrightness(96);
+	}
+	else if (CVAR_GET_FLOAT("vr_lasersight") == 2.0f) {
+        if( m_pLaser)
+        {
+            m_pLaser->Killed( NULL, GIB_NEVER );
+            m_pLaser = NULL;
+        }
+
+		if (!m_pLaserSpot)
+		{
+			m_pLaserSpot = CLaserSpot::CreateSpot();
+			m_pLaserSpot->pev->classname = MAKE_STRING("laser_sight_spot");
+			m_pLaserSpot->pev->scale = 0.5;
+		}
+
+		Vector angles = m_pPlayer->GetWeaponViewAngles();
+		UTIL_MakeVectors( angles );
+		Vector vecSrc = m_pPlayer->GetGunPosition( );;
+		Vector vecAiming = gpGlobals->v_forward;
+
+		TraceResult tr;
+		UTIL_TraceLine ( vecSrc, vecSrc + vecAiming * 8192, dont_ignore_monsters, ENT(m_pPlayer->pev), &tr );
+
+		UTIL_SetOrigin( m_pLaserSpot->pev, tr.vecEndPos );
+	}
+#endif
 }
 
 /*
@@ -599,6 +715,8 @@ void HUD_InitClientWeapons( void )
 	g_engfuncs.pfnPrecacheEvent = gEngfuncs.pfnPrecacheEvent;
 	g_engfuncs.pfnRandomFloat = gEngfuncs.pfnRandomFloat;
 	g_engfuncs.pfnRandomLong = gEngfuncs.pfnRandomLong;
+	g_engfuncs.pfnCVarGetFloat = HUD_CVarGetFloat;
+	g_engfuncs.pfnServerCommand = HUD_ServerCommand;
 
 	// Allocate a slot for the local player
 	HUD_PrepEntity( &player, NULL );
@@ -667,6 +785,8 @@ Run Weapon firing code on client
 */
 void HUD_WeaponsPostThink( local_state_s *from, local_state_s *to, usercmd_t *cmd, double time, unsigned int random_seed )
 {
+	gVRRenderer.InterceptHUDWeaponsPostThink( from, to );
+
 	int i;
 	int buttonsChanged;
 	CBasePlayerWeapon *pWeapon = NULL;

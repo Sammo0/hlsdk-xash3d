@@ -119,6 +119,7 @@ private:
 };
 
 LINK_ENTITY_TO_CLASS( monster_scientist, CScientist )
+LINK_ENTITY_TO_CLASS( monster_rosenberg, CScientist )
 
 TYPEDESCRIPTION	CScientist::m_SaveData[] =
 {
@@ -419,7 +420,10 @@ void CScientist::DeclineFollowing( void )
 {
 	Talk( 10 );
 	m_hTalkTarget = m_hEnemy;
-	PlaySentence( "SC_POK", 2, VOL_NORM, ATTN_NORM );
+	if( FClassnameIs( pev, "monster_rosenberg" ) )
+		PlaySentence( "RO_POK", 2, VOL_NORM, ATTN_NORM );
+	else
+		PlaySentence( "SC_POK", 2, VOL_NORM, ATTN_NORM );
 }
 
 void CScientist::Scream( void )
@@ -428,7 +432,10 @@ void CScientist::Scream( void )
 	{
 		Talk( 10 );
 		m_hTalkTarget = m_hEnemy;
-		PlaySentence( "SC_SCREAM", RANDOM_FLOAT( 3, 6 ), VOL_NORM, ATTN_NORM );
+		if( FClassnameIs( pev, "monster_rosenberg" ) )
+			PlaySentence( "RO_SCREAM", RANDOM_FLOAT( 3, 6 ), VOL_NORM, ATTN_NORM );
+		else
+			PlaySentence( "SC_SCREAM", RANDOM_FLOAT( 3, 6 ), VOL_NORM, ATTN_NORM );
 	}
 }
 
@@ -492,6 +499,9 @@ void CScientist::StartTask( Task_t *pTask )
 					pszSentence = "SC_FEAR";
 			}
 			PlaySentence( pszSentence, 5, VOL_NORM, ATTN_NORM );
+
+      
+     
 		}
 		TaskComplete();
 		break;
@@ -706,6 +716,7 @@ void CScientist::Spawn( void )
 //=========================================================
 void CScientist::Precache( void )
 {
+
 	if( FClassnameIs( pev, "monster_rosenberg" ) )
 	{
 		PRECACHE_MODEL( "models/scientist_rosenberg.mdl" );
@@ -719,6 +730,7 @@ void CScientist::Precache( void )
 		PRECACHE_SOUND( "rosenberg/ro_pain7.wav" );
 		PRECACHE_SOUND( "rosenberg/ro_pain8.wav" );
 	}
+
 	else if( FClassnameIs( pev, "monster_wheelchair" ) )
 	{
 		PRECACHE_MODEL( "models/wheelchair_sci.mdl" );
@@ -743,6 +755,7 @@ void CScientist::Precache( void )
 		PRECACHE_SOUND( "scientist/sci_pain5.wav" );
 	}
 
+
 	// every new scientist must call this, otherwise
 	// when a level is loaded, nobody will talk (time is reset to 0)
 	TalkInit();
@@ -762,7 +775,9 @@ void CScientist::TalkInit()
 	m_szFriends[2] = "monster_barney";
 
 	// scientists speach group names (group names are in sentences.txt)
+
 	if( FClassnameIs( pev, "monster_rosenberg" ) )
+
 	{
 		m_szGrp[TLK_ANSWER] = "";
 		m_szGrp[TLK_QUESTION] = "";
@@ -863,8 +878,11 @@ int CScientist::TakeDamage( entvars_t *pevInflictor, entvars_t *pevAttacker, flo
 {
 	if( pevInflictor && pevInflictor->flags & FL_CLIENT )
 	{
-		Remember( bits_MEMORY_PROVOKED );
-		StopFollowing( TRUE );
+		if( !FClassnameIs( pev, "monster_rosenberg" ) )
+		{
+			Remember( bits_MEMORY_PROVOKED );
+			StopFollowing( TRUE );
+		}
 	}
 
 	// make sure friends talk about it if player hurts scientist...
@@ -897,6 +915,7 @@ void CScientist::PainSound( void )
 	m_painTime = gpGlobals->time + RANDOM_FLOAT( 0.5, 0.75 );
 
 	if( FClassnameIs( pev, "monster_rosenberg" ) )
+
 	{
 		switch( RANDOM_LONG( 0, 8 ) )
 		{
@@ -977,6 +996,7 @@ void CScientist::PainSound( void )
 			break;
 		}
 	}
+
 	EMIT_SOUND_DYN( ENT( pev ), CHAN_VOICE, pszSound, 1, ATTN_NORM, 0, GetVoicePitch() );
 }
 
@@ -1137,7 +1157,7 @@ Schedule_t *CScientist::GetSchedule( void )
 				}
 				return GetScheduleOfType( SCHED_TARGET_FACE );	// Just face and follow.
 			}
-			else	// UNDONE: When afraid, scientist won't move out of your way.  Keep This?  If not, write move away scared
+			else  if( !FClassnameIs( pev, "monster_rosenberg" ) )	// UNDONE: When afraid, scientist won't move out of your way.  Keep This?  If not, write move away scared
 			{
 				if( HasConditions( bits_COND_NEW_ENEMY ) ) // I just saw something new and scary, react
 					return GetScheduleOfType( SCHED_FEAR );					// React to something scary

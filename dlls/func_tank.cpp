@@ -120,14 +120,14 @@ protected:
 
 	Vector		m_barrelPos;	// Length of the freakin barrel
 	float		m_spriteScale;	// Scale of any sprites we shoot
-	int			m_iszSpriteSmoke;
-	int			m_iszSpriteFlash;
+	string_t	m_iszSpriteSmoke;
+	string_t	m_iszSpriteFlash;
 	TANKBULLET	m_bulletType;	// Bullet type
 	int			m_iBulletDamage; // 0 means use Bullet type's default damage
 	
 	Vector		m_sightOrigin;	// Last sight of target
 	int			m_spread;		// firing spread
-	int			m_iszMaster;	// Master entity (game_team_master or multisource)
+	string_t	m_iszMaster;	// Master entity (game_team_master or multisource)
 };
 
 TYPEDESCRIPTION	CFuncTank::m_SaveData[] =
@@ -488,8 +488,9 @@ void CFuncTank::TrackTarget( void )
 	// Get a position to aim for
 	if( m_pController )
 	{
-		// Tanks attempt to mirror the player's angles
-		angles = m_pController->pev->v_angle;
+		// Tanks attempt to mirror the player's weapon angles
+		angles = m_pController->GetWeaponViewAngles();
+
 		angles[0] = 0 - angles[0];
 		pev->nextthink = pev->ltime + 0.05;
 	}

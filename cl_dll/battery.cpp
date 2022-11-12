@@ -78,7 +78,7 @@ int CHudBattery::Draw( float flTime )
 	wrect_t rc;
 
 	rc = *m_prc2;
-	rc.top  += m_iHeight * ( (float)( 100 - ( min( 100,m_iBat ) ) ) * 0.01 );	// battery can go from 0 to 100 so * 0.01 goes from 0 to 1
+	rc.top  += m_iHeight * ( (float)( 100 - ( Q_min( 100, m_iBat ) ) ) * 0.01 );	// battery can go from 0 to 100 so * 0.01 goes from 0 to 1
 
 	UnpackRGB( r, g, b, RGB_YELLOWISH );
 
@@ -108,8 +108,8 @@ int CHudBattery::Draw( float flTime )
 
 	int iOffset = ( m_prc1->bottom - m_prc1->top ) / 6;
 
-	y = ScreenHeight - gHUD.m_iFontHeight - gHUD.m_iFontHeight / 2;
-	x = ScreenWidth / 5;
+	y = ScreenHeight - gHUD.m_iFontHeight - gHUD.m_iFontHeight / 2 - (ScreenHeight / 3.4f);
+	x = (int)(ScreenWidth / 2.8f + GetStereoDepthOffset());
 
 	// make sure we have the right sprite handles
 	if( !m_hSprite1 )

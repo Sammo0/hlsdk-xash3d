@@ -321,12 +321,15 @@ BOOL CCrossbow::Deploy()
 
 void CCrossbow::Holster( int skiplocal /* = 0 */ )
 {
+	KillLaser();
+
 	m_fInReload = FALSE;// cancel any reload in progress.
 
+			/*
 	if( m_fInZoom )
 	{
 		SecondaryAttack();
-	}
+	}*/
 
 	m_pPlayer->m_flNextAttack = UTIL_WeaponTimeBase() + 0.5;
 	if( m_iClip )
@@ -337,6 +340,7 @@ void CCrossbow::Holster( int skiplocal /* = 0 */ )
 
 void CCrossbow::PrimaryAttack( void )
 {
+	/*
 #ifdef CLIENT_DLL
 	if( m_fInZoom && bIsMultiplayer() )
 #else
@@ -346,7 +350,7 @@ void CCrossbow::PrimaryAttack( void )
 		FireSniperBolt();
 		return;
 	}
-
+*/
 	FireBolt();
 }
 
@@ -378,8 +382,7 @@ void CCrossbow::FireSniperBolt()
 	// player "shoot" animation
 	m_pPlayer->SetAnimation( PLAYER_ATTACK1 );
 
-	Vector anglesAim = m_pPlayer->pev->v_angle + m_pPlayer->pev->punchangle;
-	UTIL_MakeVectors( anglesAim );
+	UTIL_MakeVectors(m_pPlayer->GetWeaponViewAngles());
 	Vector vecSrc = m_pPlayer->GetGunPosition() - gpGlobals->v_up * 2;
 	Vector vecDir = gpGlobals->v_forward;
 
@@ -421,10 +424,7 @@ void CCrossbow::FireBolt()
 	// player "shoot" animation
 	m_pPlayer->SetAnimation( PLAYER_ATTACK1 );
 
-	Vector anglesAim = m_pPlayer->pev->v_angle + m_pPlayer->pev->punchangle;
-	UTIL_MakeVectors( anglesAim );
-
-	anglesAim.x	= -anglesAim.x;
+	UTIL_MakeVectors(m_pPlayer->GetWeaponViewAngles());
 
 #ifndef CLIENT_DLL
 	Vector vecSrc	= m_pPlayer->GetGunPosition() - gpGlobals->v_up * 2;
@@ -432,10 +432,10 @@ void CCrossbow::FireBolt()
 
 	CCrossbowBolt *pBolt = CCrossbowBolt::BoltCreate();
 	pBolt->pev->origin = vecSrc;
-	pBolt->pev->angles = anglesAim;
+	pBolt->pev->angles = m_pPlayer->GetWeaponAngles();
 	pBolt->pev->owner = m_pPlayer->edict();
 
-	if( m_pPlayer->pev->waterlevel == 3 )
+	if( m_pPlayer->IsWeaponUnderWater() )
 	{
 		pBolt->pev->velocity = vecDir * BOLT_WATER_VELOCITY;
 		pBolt->pev->speed = BOLT_WATER_VELOCITY;
@@ -464,6 +464,7 @@ void CCrossbow::FireBolt()
 
 void CCrossbow::SecondaryAttack()
 {
+	/*
 	if( m_pPlayer->pev->fov != 0 )
 	{
 		m_pPlayer->pev->fov = m_pPlayer->m_iFOV = 0; // 0 means reset to default fov
@@ -477,10 +478,15 @@ void CCrossbow::SecondaryAttack()
 
 	pev->nextthink = UTIL_WeaponTimeBase() + 0.1;
 	m_flNextSecondaryAttack = UTIL_WeaponTimeBase() + 1.0;
+	 */
+
+	FireSniperBolt();
 }
 
 void CCrossbow::Reload( void )
 {
+	CBasePlayerWeapon::Reload();
+
 	if( m_pPlayer->m_rgAmmo[m_iPrimaryAmmoType] <= 0 || m_iClip == CROSSBOW_MAX_CLIP )
 		return;
 

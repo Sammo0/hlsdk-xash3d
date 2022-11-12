@@ -29,8 +29,6 @@ int grgLogoFrame[MAX_LOGO_FRAMES] =
 	29, 29, 29, 29, 29, 28, 27, 26, 25, 24, 30, 31 
 };
 
-extern int g_iVisibleMouse;
-
 float HUD_GetFOV( void );
 
 extern cvar_t *sensitivity;
@@ -58,24 +56,11 @@ void CHud::Think( void )
 		m_iFOV = newfov;
 	}
 
-	// the clients fov is actually set in the client data update section of the hud
-	// Set a new sensitivity
-	if( m_iFOV == default_fov->value )
-	{
-		// reset to saved sensitivity
-		m_flMouseSensitivity = 0;
-	}
-	else
-	{
-		// set a new sensitivity that is proportional to the change from the FOV default
-		m_flMouseSensitivity = sensitivity->value * ((float)newfov / (float)default_fov->value) * CVAR_GET_FLOAT("zoom_sensitivity_ratio");
-	}
-
 	// think about default fov
 	if( m_iFOV == 0 )
 	{
 		// only let players adjust up in fov,  and only if they are not overriden by something else
-		m_iFOV = max( default_fov->value, 90 );  
+		m_iFOV = Q_max( default_fov->value, 90 );  
 	}
 }
 
@@ -154,28 +139,6 @@ int CHud::Redraw( float flTime, int intermission )
 		SPR_DrawAdditive( i, x, y, NULL );
 	}
 
-	/*
-	if( g_iVisibleMouse )
-	{
-		void IN_GetMousePos( int *mx, int *my );
-		int mx, my;
-
-		IN_GetMousePos( &mx, &my );
-
-		if( m_hsprCursor == 0 )
-		{
-			char sz[256];
-			sprintf( sz, "sprites/cursor.spr" );
-			m_hsprCursor = SPR_Load( sz );
-		}
-
-		SPR_Set( m_hsprCursor, 250, 250, 250 );
-
-		// Draw the logo at 20 fps
-		SPR_DrawAdditive( 0, mx, my, NULL );
-	}
-	*/
-
 	return 1;
 }
 
@@ -235,29 +198,35 @@ int CHud::DrawHudString( int xpos, int ypos, int iMaxX, const char *szIt, int r,
 
 int DrawUtfString( int xpos, int ypos, int iMaxX, const char *szIt, int r, int g, int b )
 {
-	// xash3d: reset unicode state
-	gEngfuncs.pfnVGUI2DrawCharacterAdditive( 0, 0, 0, 0, 0, 0, 0 );
-
-	// draw the string until we hit the null character or a newline character
-	for( ; *szIt != 0 && *szIt != '\n'; szIt++ )
+	if (IsXashFWGS())
 	{
-		int w = gHUD.m_scrinfo.charWidths['M'];
-		if( xpos + w  > iMaxX )
-			return xpos;
-		if( ( *szIt == '^' ) && ( *( szIt + 1 ) >= '0') && ( *( szIt + 1 ) <= '7') )
-		{
-			szIt++;
-			r = colors[*szIt - '0'][0];
-			g = colors[*szIt - '0'][1];
-			b = colors[*szIt - '0'][2];
-			if( !*(++szIt) )
-				return xpos;
-		}
-		int c = (unsigned int)(unsigned char)*szIt;
-		xpos += gEngfuncs.pfnVGUI2DrawCharacterAdditive( xpos, ypos, c, r, g, b, 0 );
-	}
+		// xash3d: reset unicode state
+		gEngfuncs.pfnVGUI2DrawCharacterAdditive( 0, 0, 0, 0, 0, 0, 0 );
 
-	return xpos;
+		// draw the string until we hit the null character or a newline character
+		for( ; *szIt != 0 && *szIt != '\n'; szIt++ )
+		{
+			int w = gHUD.m_scrinfo.charWidths['M'];
+			if( xpos + w  > iMaxX )
+				return xpos;
+			if( ( *szIt == '^' ) && ( *( szIt + 1 ) >= '0') && ( *( szIt + 1 ) <= '7') )
+			{
+				szIt++;
+				r = colors[*szIt - '0'][0];
+				g = colors[*szIt - '0'][1];
+				b = colors[*szIt - '0'][2];
+				if( !*(++szIt) )
+					return xpos;
+			}
+			int c = (unsigned int)(unsigned char)*szIt;
+			xpos += gEngfuncs.pfnVGUI2DrawCharacterAdditive( xpos, ypos, c, r, g, b, 0 );
+		}
+		return xpos;
+	}
+	else
+	{
+		return gHUD.DrawHudString(xpos, ypos, iMaxX, szIt, r, g, b);
+	}
 }
 
 int CHud::DrawHudStringLen( const char *szIt )

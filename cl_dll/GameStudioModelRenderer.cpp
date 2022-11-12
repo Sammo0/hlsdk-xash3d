@@ -1,4 +1,4 @@
-//========= Copyright © 1996-2002, Valve LLC, All rights reserved. ============
+//========= Copyright (c) 1996-2002, Valve LLC, All rights reserved. ============
 //
 // Purpose: 
 //
@@ -26,6 +26,8 @@
 
 #include "StudioModelRenderer.h"
 #include "GameStudioModelRenderer.h"
+
+#include "vr_renderer.h"
 
 //
 // Override the StudioModelRender virtual member functions here to implement custom bone
@@ -82,6 +84,8 @@ R_StudioInit
 void R_StudioInit( void )
 {
 	g_StudioRenderer.Init();
+
+	gVRRenderer.Init();
 }
 
 // The simple drawing interface we'll pass back to the engine

@@ -157,6 +157,7 @@ int gmsgFade = 0;
 int gmsgSelAmmo = 0;
 int gmsgFlashlight = 0;
 int gmsgFlashBattery = 0;
+int gmsgStealth = 0;
 int gmsgResetHUD = 0;
 int gmsgInitHUD = 0;
 int gmsgShowGameTitle = 0;
@@ -215,6 +216,7 @@ void LinkUserMessages( void )
 	gmsgGeigerRange = REG_USER_MSG( "Geiger", 1 );
 	gmsgFlashlight = REG_USER_MSG( "Flashlight", 2 );
 	gmsgFlashBattery = REG_USER_MSG( "FlashBat", 1 );
+	gmsgStealth = REG_USER_MSG( "Stealth", 1 );
 	gmsgHealth = REG_USER_MSG( "Health", 1 );
 	gmsgDamage = REG_USER_MSG( "Damage", 12 );
 	gmsgBattery = REG_USER_MSG( "Battery", 2);
@@ -392,13 +394,7 @@ int CBasePlayer::TakeHealth( float flHealth, int bitsDamageType )
 
 Vector CBasePlayer::GetGunPosition()
 {
-	//UTIL_MakeVectors( pev->v_angle );
-	//m_HackedGunPos = pev->view_ofs;
-	Vector origin;
-
-	origin = pev->origin + pev->view_ofs;
-
-	return origin;
+	return GetWeaponPosition();
 }
 
 //=========================================================
@@ -806,6 +802,9 @@ void CBasePlayer::PackDeadPlayerItems( void )
 
 void CBasePlayer::RemoveAllItems( BOOL removeSuit )
 {
+	int i;
+	CBasePlayerItem *pPendingItem;
+
 	if( m_pActiveItem )
 	{
 		ResetAutoaim();
@@ -818,8 +817,8 @@ void CBasePlayer::RemoveAllItems( BOOL removeSuit )
 	if( m_pTank != 0 )
 		m_pTank->Use( this, this, USE_OFF, 0 );
 
-	int i;
-	CBasePlayerItem *pPendingItem;
+	m_iTrain = TRAIN_NEW; // turn off train
+
 	for( i = 0; i < MAX_ITEM_TYPES; i++ )
 	{
 		m_pActiveItem = m_rgpPlayerItems[i];
@@ -1442,7 +1441,7 @@ void CBasePlayer::StartObserver( Vector vecPosition, Vector vecViewAngle )
 	MESSAGE_END();
 
 	// Setup flags
-	m_iHideHUD = ( HIDEHUD_HEALTH | HIDEHUD_WEAPONS );
+	m_iHideHUD = ( HIDEHUD_HEALTH | HIDEHUD_FLASHLIGHT | HIDEHUD_WEAPONS );
 	m_afPhysicsFlags |= PFLAG_OBSERVER;
 	pev->effects = EF_NODRAW;
 	pev->view_ofs = g_vecZero;
@@ -1479,15 +1478,17 @@ void CBasePlayer::StartObserver( Vector vecPosition, Vector vecViewAngle )
 //
 // PlayerUse - handles USE keypress
 //
-#define	PLAYER_SEARCH_RADIUS	(float)64
+#define	PLAYER_HAND_SEARCH_RADIUS	(float)64
 
 void CBasePlayer::PlayerUse( void )
 {
 	if( IsObserver() )
 		return;
 
+	bool highlightActionables = CVAR_GET_FLOAT("vr_highlight_actionables") == 1.0f;
+
 	// Was use pressed or released?
-	if( !( ( pev->button | m_afButtonPressed | m_afButtonReleased) & IN_USE ) )
+	if (!highlightActionables && !( ( pev->button | m_afButtonPressed | m_afButtonReleased) & IN_USE ) )
 		return;
 
 	// Hit Use on a train?
@@ -1530,16 +1531,18 @@ void CBasePlayer::PlayerUse( void )
 	float flMaxDot = VIEW_FIELD_NARROW;
 	float flDot;
 
-	UTIL_MakeVectors( pev->v_angle );// so we know which way we are facing
+    //Use the item in the vicinity of the player's hand that the hand is pointed towards
+    Vector weaponOrigin = GetWeaponPosition();
+	UTIL_MakeVectors(GetWeaponViewAngles());
 
-	while( ( pObject = UTIL_FindEntityInSphere( pObject, pev->origin, PLAYER_SEARCH_RADIUS ) ) != NULL )
+	while( ( pObject = UTIL_FindEntityInSphere( pObject, weaponOrigin, PLAYER_HAND_SEARCH_RADIUS ) ) != NULL )
 	{
 		if( pObject->ObjectCaps() & ( FCAP_IMPULSE_USE | FCAP_CONTINUOUS_USE | FCAP_ONOFF_USE ) )
 		{
 			// !!!PERFORMANCE- should this check be done on a per case basis AFTER we've determined that
 			// this object is actually usable? This dot is being done for every object within PLAYER_SEARCH_RADIUS
 			// when player hits the use key. How many objects can be in that area, anyway? (sjb)
-			vecLOS = ( VecBModelOrigin( pObject->pev ) - ( pev->origin + pev->view_ofs ) );
+			vecLOS = ( VecBModelOrigin( pObject->pev ) - ( weaponOrigin + pev->view_ofs ) );
 
 			// This essentially moves the origin of the target to the corner nearest the player to test to see 
 			// if it's "hull" is in the view cone
@@ -1558,11 +1561,31 @@ void CBasePlayer::PlayerUse( void )
 	}
 	pObject = pClosest;
 
-	// Found an object
-	if( pObject )
+	if (highlightActionables && m_LastLocalUsableEntity)
 	{
-		//!!!UNDONE: traceline here to prevent USEing buttons through walls			
+	    //Restore previous values
+		m_LastLocalUsableEntity->pev->rendermode = m_LastLocalUsableEntityRenderFX.rendermode;
+		m_LastLocalUsableEntity->pev->renderfx = m_LastLocalUsableEntityRenderFX.renderfx;
+		m_LastLocalUsableEntity->pev->renderamt = m_LastLocalUsableEntityRenderFX.renderamt;
+	}
+    m_LastLocalUsableEntity = nullptr;
+
+	//Check player hasn't put their hand through a wall to use this
+    TraceResult tr;
+    Vector vecSrc = weaponOrigin;
+    Vector vecEnd = EyePosition();
+    UTIL_TraceLine( vecSrc, vecEnd, ignore_monsters, edict(), &tr );
+
+    static bool itemUsedHaptic = false;
+
+	// Found an object
+	if( pObject &&
+       //Check player can actually reach this object (nothing in the way)
+	   !tr.fStartSolid && tr.flFraction == 1.0f)
+	{
 		int caps = pObject->ObjectCaps();
+
+		bool usingObject = false;
 
 		if( m_afButtonPressed & IN_USE )
 			EMIT_SOUND( ENT(pev), CHAN_ITEM, "common/wpn_select.wav", 0.4, ATTN_NORM );
@@ -1570,19 +1593,74 @@ void CBasePlayer::PlayerUse( void )
 		if( ( ( pev->button & IN_USE ) && ( caps & FCAP_CONTINUOUS_USE ) ) ||
 			 ( ( m_afButtonPressed & IN_USE ) && ( caps & ( FCAP_IMPULSE_USE | FCAP_ONOFF_USE ) ) ) )
 		{
-			if( caps & FCAP_CONTINUOUS_USE )
-				m_afPhysicsFlags |= PFLAG_USING;
+            char buffer[256];
+			if( caps & FCAP_CONTINUOUS_USE ) {
+                m_afPhysicsFlags |= PFLAG_USING;
+
+                //pulse-vibrate
+                sprintf(buffer, "vibrate 10.0 %i %f\n", 1 - (int) CVAR_GET_FLOAT("hand"),
+                        sin(gpGlobals->time * 12.0f) * 0.6f);
+
+                usingObject = true;
+            }
+			else
+			{
+                //big blip to indicate "used" and then stop vibrating
+                if (!itemUsedHaptic) {
+					char buffer[256];
+					sprintf(buffer, "vibrate 250.0 %i 1.0\n", 1 - (int) CVAR_GET_FLOAT("hand"));
+					SERVER_COMMAND(buffer);
+
+					//Set flag so we stop haptics for now
+					itemUsedHaptic = true;
+				}
+            }
 
 			pObject->Use( this, this, USE_SET, 1 );
+
+            SERVER_COMMAND(buffer);
 		}
 		// UNDONE: Send different USE codes for ON/OFF.  Cache last ONOFF_USE object to send 'off' if you turn away
-		else if( ( m_afButtonReleased & IN_USE ) && ( pObject->ObjectCaps() & FCAP_ONOFF_USE ) )	// BUGBUG This is an "off" use
-		{
-			pObject->Use( this, this, USE_SET, 0 );
+		else if( ( m_afButtonReleased & IN_USE ) ) {
+			if (pObject->ObjectCaps() & FCAP_ONOFF_USE)    // BUGBUG This is an "off" use
+			{
+				pObject->Use(this, this, USE_SET, 0);
+			}
+
+			itemUsedHaptic = false;
 		}
+
+
+        if (highlightActionables &&
+            pObject->pev->movetype != MOVETYPE_PUSHSTEP && // We don't want to highlight things like pushable boxes
+            // We don't want to highlight helpful people as "usable" either (even though they are)
+            pObject->Classify() != CLASS_HUMAN_PASSIVE && pObject->Classify() != CLASS_PLAYER_ALLY)
+        {
+            //Make newly located object glow if we are in a position to trigger it
+            m_LastLocalUsableEntity = pObject;
+
+            // save the object's current render fx
+            m_LastLocalUsableEntityRenderFX.rendermode = pObject->pev->rendermode;
+            m_LastLocalUsableEntityRenderFX.renderfx = pObject->pev->renderfx;
+            m_LastLocalUsableEntityRenderFX.renderamt = pObject->pev->renderamt;
+
+            //Update with "glowing" attributes
+            pObject->pev->renderfx = usingObject ? kRenderFxNoDissipation : kRenderFxPulseFast;
+            pObject->pev->rendermode = kRenderGlow;
+            pObject->pev->renderamt = 192;
+
+            if (!usingObject && !itemUsedHaptic) {
+                //continuous vibrate to indicate "usable"
+                char buffer[256];
+                sprintf(buffer, "vibrate 10.0 %i 0.1\n", 1-(int)CVAR_GET_FLOAT("hand"));
+                SERVER_COMMAND(buffer);
+            }
+        }
 	}
 	else
 	{
+        itemUsedHaptic = false;
+
 		if( m_afButtonPressed & IN_USE )
 			EMIT_SOUND( ENT( pev ), CHAN_ITEM, "common/wpn_denyselect.wav", 0.4, ATTN_NORM );
 	}
@@ -1817,7 +1895,6 @@ void CBasePlayer::UpdateStatusBar()
 }
 
 #define CLIMB_SHAKE_FREQUENCY		22	// how many frames in between screen shakes when climbing
-#define	MAX_CLIMB_SPEED			200	// fastest vertical climbing speed possible
 #define	CLIMB_SPEED_DEC			15	// climbing deceleration rate
 #define	CLIMB_PUNCH_X			-7  // how far to 'punch' client X axis when climbing
 #define CLIMB_PUNCH_Z			7	// how far to 'punch' client Z axis when climbing
@@ -1881,6 +1958,7 @@ void CBasePlayer::PreThink( void )
 	{
 		CBaseEntity *pTrain = CBaseEntity::Instance( pev->groundentity );
 		float vel;
+		int iGearId;	// Vit_amiN: keeps the train control HUD in sync
 
 		if( !pTrain )
 		{
@@ -1921,10 +1999,12 @@ void CBasePlayer::PreThink( void )
 			pTrain->Use( this, this, USE_SET, (float)vel );
 		}
 
-		if( vel )
+		iGearId = TrainSpeed( pTrain->pev->speed, pTrain->pev->impulse );
+
+		if( iGearId != ( m_iTrain & 0x0F ) )	// Vit_amiN: speed changed
 		{
-			m_iTrain = TrainSpeed( (int)pTrain->pev->speed, pTrain->pev->impulse );
-			m_iTrain |= TRAIN_ACTIVE|TRAIN_NEW;
+			m_iTrain = iGearId;
+			m_iTrain |= TRAIN_ACTIVE | TRAIN_NEW;
 		}
 	}
 	else if( m_iTrain & TRAIN_ACTIVE )
@@ -2780,7 +2860,7 @@ edict_t *EntSelectSpawnPoint( CBaseEntity *pPlayer )
 	}
 
 	// If startspot is set, (re)spawn there.
-	if( FStringNull( gpGlobals->startspot ) || !strlen(STRING( gpGlobals->startspot ) ) )
+	if( FStringNull( gpGlobals->startspot ) || (STRING( gpGlobals->startspot ) )[0] == '\0')
 	{
 		pSpot = UTIL_FindEntityByClassname( NULL, "info_player_start" );
 		if( !FNullEnt( pSpot ) )
@@ -2826,7 +2906,7 @@ void CBasePlayer::Spawn( void )
 	m_bitsHUDDamage = -1;
 	m_bitsDamageType = 0;
 	m_afPhysicsFlags = 0;
-	m_fLongJump = FALSE;// no longjump module. 
+	m_fLongJump = FALSE;// no longjump module.
 
 	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "slj", "0" );
 	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "hl", "1" );
@@ -2897,6 +2977,8 @@ void CBasePlayer::Spawn( void )
 		m_rgAmmo[i] = 0;
 		m_rgAmmoLast[i] = 0;  // client ammo values also have to be reset  (the death hud clear messages does on the client side)
 	}
+
+	m_LastLocalUsableEntity = nullptr;
 
 	m_lastx = m_lasty = 0;
 
@@ -2995,6 +3077,8 @@ void CBasePlayer::Precache( void )
 
 	if( gInitHUD )
 		m_fInitHUD = TRUE;
+
+	pev->fov = m_iFOV;	// Vit_amiN: restore the FOV on level change or map/saved game load
 }
 
 int CBasePlayer::Save( CSave &save )
@@ -3029,7 +3113,7 @@ int CBasePlayer::Restore( CRestore &restore )
 		// default to normal spawn
 		edict_t *pentSpawnSpot = EntSelectSpawnPoint( this );
 		pev->origin = VARS( pentSpawnSpot )->origin + Vector( 0, 0, 1 );
-		pev->angles = VARS( pentSpawnSpot )->angles;
+		ClearClientOriginOffset();
 	}
 	pev->v_angle.z = 0;	// Clear out roll
 	pev->angles = pev->v_angle;
@@ -3360,6 +3444,18 @@ BOOL CBasePlayer::FlashlightIsOn( void )
 	return FBitSet( pev->effects, EF_DIMLIGHT );
 }
 
+BOOL CBasePlayer::FlashlightInInventory( void ) {
+	if (!g_pGameRules->FAllowFlashlight()) {
+		return FALSE;
+	}
+
+	if ((pev->weapons & (1 << WEAPON_SUIT))) {
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 void CBasePlayer::FlashlightTurnOn( void )
 {
 	if( !g_pGameRules->FAllowFlashlight() )
@@ -3405,10 +3501,16 @@ void CBasePlayer::ForceClientDllUpdate( void )
 {
 	m_iClientHealth = -1;
 	m_iClientBattery = -1;
+	m_iClientHideHUD = -1;	// Vit_amiN: forcing to update
+	m_iClientFOV = -1;	// Vit_amiN: force client weapons to be sent
 	m_iTrain |= TRAIN_NEW;  // Force new train message.
 	m_fWeapon = FALSE;          // Force weapon send
 	m_fKnownItem = FALSE;    // Force weaponinit messages.
 	m_fInitHUD = TRUE;		// Force HUD gmsgResetHUD message
+	m_bSentBhopcap = true; // a1ba: Update bhopcap state
+	memset( m_rgAmmoLast, 0, sizeof( m_rgAmmoLast )); // a1ba: Force update AmmoX
+
+
 
 	// Now force all the necessary messages
 	//  to be sent.
@@ -3524,6 +3626,8 @@ void CBasePlayer::CheatImpulseCommands( int iImpulse )
 	case 101:
 		gEvilImpulse101 = TRUE;
 		GiveNamedItem( "item_suit" );
+		GiveNamedItem( "item_armorvest" );
+		GiveNamedItem( "item_helmet" );
 		GiveNamedItem( "item_battery" );
 		GiveNamedItem( "weapon_crowbar" );
 		GiveNamedItem( "weapon_9mmhandgun" );
@@ -3608,7 +3712,7 @@ void CBasePlayer::CheatImpulseCommands( int iImpulse )
 
 			edict_t *pWorld = g_engfuncs.pfnPEntityOfEntIndex( 0 );
 
-			Vector start = pev->origin + pev->view_ofs;
+			Vector start = EyePosition();
 			Vector end = start + gpGlobals->v_forward * 1024;
 			UTIL_TraceLine( start, end, ignore_monsters, edict(), &tr );
 			if( tr.pHit )
@@ -3646,7 +3750,7 @@ void CBasePlayer::CheatImpulseCommands( int iImpulse )
 	case 202:
 		// Random blood splatter
 		UTIL_MakeVectors( pev->v_angle );
-		UTIL_TraceLine( pev->origin + pev->view_ofs, pev->origin + pev->view_ofs + gpGlobals->v_forward * 128, ignore_monsters, ENT( pev ), &tr );
+		UTIL_TraceLine( pev->origin + pev->view_ofs, EyePosition() + gpGlobals->v_forward * 128, ignore_monsters, ENT( pev ), &tr );
 
 		if( tr.flFraction != 1.0 )
 		{
@@ -3833,7 +3937,7 @@ void CBasePlayer::ItemPreFrame()
 	if( !m_pActiveItem )
 		return;
 
-	m_pActiveItem->ItemPreFrame();
+    m_pActiveItem->ItemPreFrame();
 }
 
 /*
@@ -3861,6 +3965,13 @@ void CBasePlayer::ItemPostFrame()
 	}
 
 	ImpulseCommands();
+
+	//Inform client we have the flashlight in our inventory (used in VR for off-hand flashlight model)
+	if (FlashlightInInventory()) {
+		pev->flags |= FL_HAS_FLASHLIGHT;
+	} else {
+		pev->flags &= ~FL_HAS_FLASHLIGHT;
+	}
 
 	if( !m_pActiveItem )
 		return;
@@ -3965,6 +4076,11 @@ void CBasePlayer::UpdateClientData( void )
 			WRITE_BYTE( m_iFlashBattery );
 		MESSAGE_END();
 
+		// Vit_amiN: the geiger state could run out of sync, too
+		MESSAGE_BEGIN( MSG_ONE, gmsgGeigerRange, NULL, pev );
+			WRITE_BYTE( 0 );
+		MESSAGE_END();
+
 		InitStatusBar();
 	}
 
@@ -4010,7 +4126,7 @@ void CBasePlayer::UpdateClientData( void )
 		m_iClientHealth = (int)pev->health;
 	}
 
-	if( pev->armorvalue != m_iClientBattery )
+	if( (int)pev->armorvalue != m_iClientBattery )
 	{
 		m_iClientBattery = (int)pev->armorvalue;
 
@@ -4096,6 +4212,18 @@ void CBasePlayer::UpdateClientData( void )
 		MESSAGE_END();
 
 		m_iTrain &= ~TRAIN_NEW;
+	}
+
+	//Send "stealth" flag
+	{
+		ASSERT( gmsgStealth > 0 );
+
+		int val = ( FBitSet( pev->flags, FL_DUCKING ) ) ? 1 : 0;
+
+		// send "health" update message
+		MESSAGE_BEGIN( MSG_ONE, gmsgStealth, NULL, pev );
+			WRITE_BYTE( val );
+		MESSAGE_END();
 	}
 
 	//
@@ -4249,210 +4377,18 @@ void CBasePlayer::EnableControl( BOOL fControl )
 //=========================================================
 Vector CBasePlayer::GetAutoaimVector( float flDelta )
 {
-	if( g_iSkillLevel == SKILL_HARD )
-	{
-		UTIL_MakeVectors( pev->v_angle + pev->punchangle );
-		return gpGlobals->v_forward;
-	}
-
-	Vector vecSrc = GetGunPosition();
-	float flDist = 8192;
-
-	// always use non-sticky autoaim
-	// UNDONE: use sever variable to chose!
-	if( 1 || g_iSkillLevel == SKILL_MEDIUM )
-	{
-		m_vecAutoAim = Vector( 0, 0, 0 );
-		// flDelta *= 0.5;
-	}
-
-	BOOL m_fOldTargeting = m_fOnTarget;
-	Vector angles = AutoaimDeflection(vecSrc, flDist, flDelta );
-
-	// update ontarget if changed
-	if( !g_pGameRules->AllowAutoTargetCrosshair() )
-		m_fOnTarget = 0;
-	else if( m_fOldTargeting != m_fOnTarget )
-	{
-		m_pActiveItem->UpdateItemInfo();
-	}
-
-	if( angles.x > 180 )
-		angles.x -= 360;
-	if( angles.x < -180 )
-		angles.x += 360;
-	if( angles.y > 180 )
-		angles.y -= 360;
-	if( angles.y < -180 )
-		angles.y += 360;
-
-	if( angles.x > 25 )
-		angles.x = 25;
-	if( angles.x < -25 )
-		angles.x = -25;
-	if( angles.y > 12 )
-		angles.y = 12;
-	if( angles.y < -12 )
-		angles.y = -12;
-
-	// always use non-sticky autoaim
-	// UNDONE: use sever variable to chose!
-	if( 0 || g_iSkillLevel == SKILL_EASY )
-	{
-		m_vecAutoAim = m_vecAutoAim * 0.67 + angles * 0.33;
-	}
-	else
-	{
-		m_vecAutoAim = angles * 0.9;
-	}
-
-	// m_vecAutoAim = m_vecAutoAim * 0.99;
-
-	// Don't send across network if sv_aim is 0
-	if( g_psv_aim->value != 0 )
-	{
-		if( m_vecAutoAim.x != m_lastx || m_vecAutoAim.y != m_lasty )
-		{
-			SET_CROSSHAIRANGLE( edict(), -m_vecAutoAim.x, m_vecAutoAim.y );
-
-			m_lastx = (int)m_vecAutoAim.x;
-			m_lasty = (int)m_vecAutoAim.y;
-		}
-	}
-
-	// ALERT( at_console, "%f %f\n", angles.x, angles.y );
-
-	UTIL_MakeVectors( pev->v_angle + pev->punchangle + m_vecAutoAim );
+	// no auto aim in VR
+	UTIL_MakeVectors(GetWeaponViewAngles());
 	return gpGlobals->v_forward;
 }
 
 Vector CBasePlayer::AutoaimDeflection( Vector &vecSrc, float flDist, float flDelta )
 {
-	edict_t *pEdict = g_engfuncs.pfnPEntityOfEntIndex( 1 );
-	CBaseEntity *pEntity;
-	float bestdot;
-	Vector bestdir;
-	edict_t *bestent;
-	TraceResult tr;
-
-	if( g_psv_aim->value == 0 )
-	{
-		m_fOnTarget = FALSE;
-		return g_vecZero;
-	}
-
-	UTIL_MakeVectors( pev->v_angle + pev->punchangle + m_vecAutoAim );
-
-	// try all possible entities
-	bestdir = gpGlobals->v_forward;
-	bestdot = flDelta; // +- 10 degrees
-	bestent = NULL;
-
-	m_fOnTarget = FALSE;
-
-	UTIL_TraceLine( vecSrc, vecSrc + bestdir * flDist, dont_ignore_monsters, edict(), &tr );
-
-	if( tr.pHit && tr.pHit->v.takedamage != DAMAGE_NO )
-	{
-		// don't look through water
-		if( !( ( pev->waterlevel != 3 && tr.pHit->v.waterlevel == 3 ) || ( pev->waterlevel == 3 && tr.pHit->v.waterlevel == 0 ) ) )
-		{
-			if( tr.pHit->v.takedamage == DAMAGE_AIM )
-				m_fOnTarget = TRUE;
-
-			return m_vecAutoAim;
-		}
-	}
-
-	for( int i = 1; i < gpGlobals->maxEntities; i++, pEdict++ )
-	{
-		Vector center;
-		Vector dir;
-		float dot;
-
-		if( pEdict->free )	// Not in use
-			continue;
-
-		if( pEdict->v.takedamage != DAMAGE_AIM )
-			continue;
-		if( pEdict == edict() )
-			continue;
-		//if( pev->team > 0 && pEdict->v.team == pev->team )
-		//	continue;	// don't aim at teammate
-		if( !g_pGameRules->ShouldAutoAim( this, pEdict ) )
-			continue;
-
-		pEntity = Instance( pEdict );
-		if( pEntity == NULL )
-			continue;
-
-		if( !pEntity->IsAlive() )
-			continue;
-
-		// don't look through water
-		if( ( pev->waterlevel != 3 && pEntity->pev->waterlevel == 3 ) || ( pev->waterlevel == 3 && pEntity->pev->waterlevel == 0 ) )
-			continue;
-
-		center = pEntity->BodyTarget( vecSrc );
-
-		dir = ( center - vecSrc ).Normalize();
-
-		// make sure it's in front of the player
-		if( DotProduct( dir, gpGlobals->v_forward ) < 0 )
-			continue;
-
-		dot = fabs( DotProduct( dir, gpGlobals->v_right ) ) + fabs( DotProduct( dir, gpGlobals->v_up ) ) * 0.5;
-
-		// tweek for distance
-		dot *= 1.0 + 0.2 * ( ( center - vecSrc ).Length() / flDist );
-
-		if( dot > bestdot )
-			continue;	// to far to turn
-
-		UTIL_TraceLine( vecSrc, center, dont_ignore_monsters, edict(), &tr );
-		if( tr.flFraction != 1.0 && tr.pHit != pEdict )
-		{
-			// ALERT( at_console, "hit %s, can't see %s\n", STRING( tr.pHit->v.classname ), STRING( pEdict->v.classname ) );
-			continue;
-		}
-
-		// don't shoot at friends
-		if( IRelationship( pEntity ) < 0 )
-		{
-			if( !pEntity->IsPlayer() && !g_pGameRules->IsDeathmatch() )
-				// ALERT( at_console, "friend\n" );
-				continue;
-		}
-
-		// can shoot at this one
-		bestdot = dot;
-		bestent = pEdict;
-		bestdir = dir;
-	}
-
-	if( bestent )
-	{
-		bestdir = UTIL_VecToAngles( bestdir );
-		bestdir.x = -bestdir.x;
-		bestdir = bestdir - pev->v_angle - pev->punchangle;
-
-		if( bestent->v.takedamage == DAMAGE_AIM )
-			m_fOnTarget = TRUE;
-
-		return bestdir;
-	}
-
-	return Vector( 0, 0, 0 );
+	return Vector( );
 }
 
 void CBasePlayer::ResetAutoaim()
 {
-	if( m_vecAutoAim.x != 0 || m_vecAutoAim.y != 0 )
-	{
-		m_vecAutoAim = Vector( 0, 0, 0 );
-		SET_CROSSHAIRANGLE( edict(), 0, 0 );
-	}
-	m_fOnTarget = FALSE;
 }
 
 /*
@@ -4495,7 +4431,7 @@ void CBasePlayer::DropPlayerItem( char *pszItemName )
 		return;
 	}
 
-	if( !strlen( pszItemName ) )
+	if( pszItemName[0] == '\0' )
 	{
 		// if this string has no length, the client didn't type a name!
 		// assume player wants to drop the active item.
@@ -4865,3 +4801,64 @@ void CInfoIntermission::Think( void )
 }
 
 LINK_ENTITY_TO_CLASS( info_intermission, CInfoIntermission )
+
+// Methods and members for VR stuff - Max Vollmer, 2017-08-18
+// Called by Util_SetOrigin
+void CBasePlayer::ClearClientOriginOffset()
+{
+	vr_ClientOriginOffset.x = 0;
+	vr_ClientOriginOffset.y = 0;
+}
+void CBasePlayer::UpdateVRRelatedPositions(const Vector & hmdOffset, const Vector & weaponOffset, const Vector & weaponAngles, const Vector & weaponVelocity)
+{
+	// First get origin where the client thinks it is:
+	Vector clientOrigin = GetClientOrigin();
+
+	// Then get headset position:
+	Vector hmdPosition = clientOrigin + hmdOffset;
+
+	// Get new server origin from headset x/y coordinates
+	Vector newOrigin = Vector(hmdPosition.x, hmdPosition.y, clientOrigin.z);
+	pev->origin = newOrigin;
+
+	vr_weaponOffset = weaponOffset;
+	vr_weaponAngles = weaponAngles;
+	vr_weaponVelocity = weaponVelocity;
+}
+const Vector CBasePlayer::GetWeaponPosition()
+{
+	return Vector(pev->origin.x + vr_weaponOffset.x, pev->origin.y + vr_weaponOffset.y, vr_weaponOffset.z);
+}
+const Vector CBasePlayer::GetWeaponAngles()
+{
+	return vr_weaponAngles;
+}
+const Vector CBasePlayer::GetWeaponViewAngles()
+{
+	Vector angles = GetWeaponAngles();
+	angles.x = -angles.x;
+	return angles;
+}
+const Vector CBasePlayer::GetWeaponVelocity()
+{
+	return vr_weaponVelocity;
+}
+const Vector CBasePlayer::GetClientOrigin()
+{
+	return Vector(pev->origin.x + vr_ClientOriginOffset.x, pev->origin.y + vr_ClientOriginOffset.y, pev->origin.z);
+}
+const Vector CBasePlayer::GetClientViewOfs()
+{
+	return Vector((pev->origin + pev->view_ofs) - GetClientOrigin());
+}
+bool CBasePlayer::IsWeaponUnderWater()
+{
+	return UTIL_PointContents(GetWeaponPosition()) == CONTENTS_WATER;
+}
+bool CBasePlayer::IsWeaponPositionValid()
+{
+	int weaponOriginContent = UTIL_PointContents(GetWeaponPosition());
+	return weaponOriginContent == CONTENTS_EMPTY || weaponOriginContent == CONTENTS_WATER;
+}
+
+

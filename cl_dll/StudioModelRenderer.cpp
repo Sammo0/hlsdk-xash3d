@@ -1,4 +1,4 @@
-//========= Copyright © 1996-2002, Valve LLC, All rights reserved. ============
+//========= Copyright (c) 1996-2002, Valve LLC, All rights reserved. ============
 //
 // Purpose: 
 //
@@ -28,6 +28,7 @@
 
 #include "StudioModelRenderer.h"
 #include "GameStudioModelRenderer.h"
+#include "Matrices.h"
 
 // Global engine <-> studio model rendering code interface
 engine_studio_api_t IEngineStudio;
@@ -87,6 +88,7 @@ CStudioModelRenderer::CStudioModelRenderer( void )
 	m_pCvarHiModels		= NULL;
 	m_pCvarDeveloper	= NULL;
 	m_pCvarDrawEntities	= NULL;
+	m_pCvarMirrorWeapons= NULL;
 	m_pChromeSprite		= NULL;
 	m_pStudioModelCount	= NULL;
 	m_pModelsDrawn		= NULL;
@@ -434,7 +436,7 @@ StudioSetUpTransform
 
 ====================
 */
-void CStudioModelRenderer::StudioSetUpTransform( int trivial_accept )
+void CStudioModelRenderer::StudioSetUpTransform( int flags )
 {
 	int i;
 	vec3_t angles;
@@ -521,7 +523,32 @@ void CStudioModelRenderer::StudioSetUpTransform( int trivial_accept )
 	//Con_DPrintf( "%.0f %0.f %0.f\n", angles[0], angles[1], angles[2] );
 
 	angles[PITCH] = -angles[PITCH];
-	AngleMatrix( angles, ( *m_protationmatrix ) );
+
+	float			mirrormatrix[3][4];
+	memset(mirrormatrix, 0, sizeof(float) * 12);
+	mirrormatrix[0][0] = 1;
+
+	//If this is the player model and they specifically requested mirrored weapons
+
+    if (m_pCvarMirrorWeapons == NULL) {
+        m_pCvarMirrorWeapons = IEngineStudio.GetCvar("vr_mirror_weapons");
+    }
+
+	if ((flags & STUDIO_VIEWMODEL) &&
+            m_pCvarMirrorWeapons != NULL &&
+			m_pCvarMirrorWeapons->value) {
+        mirrormatrix[1][1] = -1;
+    } else
+    {
+	    //Not mirroring, this is a simple identity matrix
+        mirrormatrix[1][1] = 1;
+	}
+	mirrormatrix[2][2] = 1;
+
+	float			rotationmatrix[3][4];
+	AngleMatrix( angles, rotationmatrix );
+
+	ConcatTransforms( rotationmatrix, mirrormatrix, *m_protationmatrix );
 
 	if( !IEngineStudio.IsHardware() )
 	{
@@ -543,7 +570,7 @@ void CStudioModelRenderer::StudioSetUpTransform( int trivial_accept )
 		// Also scale down z, so 1/z is scaled 31 bits for free, and scale down x and y
 		// correspondingly so the projected x and y come out right
 		// FIXME: make this work for clipped case too?
-		if( trivial_accept )
+		if( flags )
 		{
 			for( i = 0; i < 4; i++ )
 			{
@@ -902,6 +929,18 @@ void CStudioModelRenderer::StudioSetupBones( void )
 		panim = StudioGetAnim( m_pRenderModel, pseqdesc );
 		StudioCalcRotations( pos2, q2, pseqdesc, panim, m_pPlayerInfo->gaitframe );
 
+		// Added studio model scaling - Max Vollmer, 2017-08-26
+		if (m_pCurrentEntity->curstate.scale > 0)
+		{
+			for (int j = 0; j < 3; j++)
+			{
+				for (int k = 0; k < 3; k++)
+				{
+					(*m_protationmatrix)[j][k] *= m_pCurrentEntity->curstate.scale;
+				}
+			}
+		}
+
 		for( i = 0; i < m_pStudioHeader->numbones; i++ )
 		{
 			for( j = 0; j < LEGS_BONES_COUNT; j++ )
@@ -1116,7 +1155,7 @@ int CStudioModelRenderer::StudioDrawModel( int flags )
 	IEngineStudio.StudioSetHeader( m_pStudioHeader );
 	IEngineStudio.SetRenderModel( m_pRenderModel );
 
-	StudioSetUpTransform( 0 );
+	StudioSetUpTransform( flags );
 
 	if( flags & STUDIO_RENDER )
 	{

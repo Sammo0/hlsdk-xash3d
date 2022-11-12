@@ -296,6 +296,8 @@ void W_Precache( void )
 	// common world objects
 	UTIL_PrecacheOther( "item_suit" );
 	UTIL_PrecacheOther( "item_healthkit" );
+	UTIL_PrecacheOther( "item_armorvest" );
+	UTIL_PrecacheOther( "item_helmet" );
 	UTIL_PrecacheOther( "item_battery" );
 	UTIL_PrecacheOther( "item_antidote" );
 	UTIL_PrecacheOther( "item_security" );
@@ -422,7 +424,19 @@ TYPEDESCRIPTION	CBasePlayerWeapon::m_SaveData[] =
 	//DEFINE_FIELD( CBasePlayerWeapon, m_iClientWeaponState, FIELD_INTEGER ), reset to zero on load so hud gets updated correctly
 };
 
-IMPLEMENT_SAVERESTORE( CBasePlayerWeapon, CBasePlayerItem )
+int CBasePlayerWeapon::Save(CSave& save)
+{
+	if (!CBasePlayerItem::Save(save))
+		return 0;
+	return save.WriteFields("CBasePlayerWeapon", this, m_SaveData, ARRAYSIZE(m_SaveData));
+}
+
+int CBasePlayerWeapon::Restore(CRestore& restore)
+{
+	if (!CBasePlayerItem::Restore(restore))
+		return 0;
+	return restore.ReadFields("CBasePlayerWeapon", this, m_SaveData, ARRAYSIZE(m_SaveData));
+}
 
 void CBasePlayerItem::SetObjectCollisionBox( void )
 {
@@ -607,6 +621,8 @@ void CBasePlayerWeapon::ItemPostFrame( void )
 {
 	WeaponTick();
 
+	MakeLaser();
+
 	if( ( m_fInReload ) && ( m_pPlayer->m_flNextAttack <= UTIL_WeaponTimeBase() ) )
 	{
 		// complete the reload. 
@@ -685,6 +701,111 @@ void CBasePlayerWeapon::ItemPostFrame( void )
 	{
 		WeaponIdle();
 	}
+}
+
+#ifndef CLIENT_DLL
+LINK_ENTITY_TO_CLASS( laser_sight, CLaserSight )
+LINK_ENTITY_TO_CLASS( laser_sight_spot, CLaserSpot )
+
+
+//=========================================================
+//=========================================================
+CLaserSight *CLaserSight::CreateLaserSight()
+{
+	CLaserSight *pLaser = GetClassPtr( (CLaserSight *)NULL );
+	pLaser->Spawn();
+
+	pLaser->pev->classname = MAKE_STRING( "laser_sight" );
+
+	return pLaser;
+}
+
+//=========================================================
+//=========================================================
+void CLaserSight::Spawn( void )
+{
+	BeamInit( g_pModelNameLaser, 3 );
+	pev->movetype = MOVETYPE_NONE;
+	pev->solid = SOLID_NOT;
+}
+#endif
+
+void CBasePlayerWeapon::KillLaser( void )
+{
+#ifndef CLIENT_DLL
+	if( m_pLaser)
+	{
+		m_pLaser->Killed( NULL, GIB_NEVER );
+		m_pLaser = NULL;
+	}
+	if( m_pLaserSpot)
+	{
+		m_pLaserSpot->Killed( NULL, GIB_NEVER );
+		m_pLaserSpot = NULL;
+	}
+#endif
+}
+
+
+void CBasePlayerWeapon::MakeLaser( void )
+{
+#ifndef CLIENT_DLL
+	if (CVAR_GET_FLOAT("vr_lasersight") == 0.0f) {
+		KillLaser();
+		return;
+	}
+	else if (CVAR_GET_FLOAT("vr_lasersight") == 1.0f) {
+		if( m_pLaserSpot)
+		{
+			m_pLaserSpot->Killed( NULL, GIB_NEVER );
+			m_pLaserSpot = NULL;
+		}
+
+		TraceResult tr;
+		Vector vecSrc = m_pPlayer->GetGunPosition();
+		Vector vecAiming = m_pPlayer->GetAutoaimVector(AUTOAIM_5DEGREES);
+		Vector vecEnd;
+		vecEnd = vecSrc + vecAiming * 2048;
+		UTIL_TraceLine(vecSrc, vecEnd, dont_ignore_monsters, ENT(pev), &tr);
+
+		float flBeamLength = tr.flFraction;
+
+		// set to follow laser spot
+		Vector vecTmpEnd = vecSrc + vecAiming * 2048 * flBeamLength;
+		if (!m_pLaser || !(m_pLaser->pev)) {
+			m_pLaser = CLaserSight::CreateLaserSight();
+		}
+
+		m_pLaser->PointsInit(vecSrc, vecTmpEnd);
+		m_pLaser->SetColor(214, 34, 34);
+		m_pLaser->SetScrollRate(255);
+		m_pLaser->SetBrightness(96);
+	}
+	else if (CVAR_GET_FLOAT("vr_lasersight") == 2.0f) {
+		if( m_pLaser)
+		{
+			m_pLaser->Killed( NULL, GIB_NEVER );
+			m_pLaser = NULL;
+		}
+
+		if (!m_pLaserSpot)
+		{
+			m_pLaserSpot = CLaserSpot::CreateSpot();
+			m_pLaserSpot->pev->classname = MAKE_STRING("laser_sight_spot");
+			m_pLaserSpot->pev->scale = 0.5;
+		}
+
+		Vector angles = m_pPlayer->GetWeaponViewAngles();
+		UTIL_MakeVectors( angles );
+		Vector vecSrc = m_pPlayer->GetGunPosition( );;
+		Vector vecAiming = gpGlobals->v_forward;
+
+		TraceResult tr;
+		UTIL_TraceLine ( vecSrc, vecSrc + vecAiming * 8192, dont_ignore_monsters, ENT(m_pPlayer->pev), &tr );
+
+		UTIL_SetOrigin( m_pLaserSpot->pev, tr.vecEndPos );
+	}
+#endif
 }
 
 void CBasePlayerItem::DestroyItem( void )
@@ -776,10 +897,7 @@ int CBasePlayerWeapon::UpdateClientData( CBasePlayer *pPlayer )
 	int state = 0;
 	if( pPlayer->m_pActiveItem == this )
 	{
-		if( pPlayer->m_fOnTarget )
-			state = WEAPON_IS_ONTARGET;
-		else
-			state = 1;
+		state = 1;
 	}
 
 	// Forcing send of all data!
@@ -1014,7 +1132,8 @@ int CBasePlayerWeapon::SecondaryAmmoIndex( void )
 }
 
 void CBasePlayerWeapon::Holster( int skiplocal /* = 0 */ )
-{ 
+{
+	KillLaser();
 	m_fInReload = FALSE; // cancel any reload in progress.
 	m_pPlayer->pev->viewmodel = 0; 
 	m_pPlayer->pev->weaponmodel = 0;
@@ -1132,6 +1251,13 @@ int CBasePlayerWeapon::ExtractClipAmmo( CBasePlayerWeapon *pWeapon )
 
 	return pWeapon->m_pPlayer->GiveAmmo( iAmmo, (char *)pszAmmo1(), iMaxAmmo1() ); // , &m_iPrimaryAmmoType
 }
+
+void CBasePlayerWeapon::Reload( void )
+{
+	//Just stop the laser aim
+	KillLaser();
+}
+
 	
 //=========================================================
 // RetireWeapon - no more ammo for this gun, put it away.
@@ -1577,7 +1703,7 @@ IMPLEMENT_SAVERESTORE( CRpg, CBasePlayerWeapon )
 TYPEDESCRIPTION	CRpgRocket::m_SaveData[] =
 {
 	DEFINE_FIELD( CRpgRocket, m_flIgniteTime, FIELD_TIME ),
-	DEFINE_FIELD( CRpgRocket, m_hLauncher, FIELD_EHANDLE ),
+	DEFINE_FIELD( CRpgRocket, m_pLauncher, FIELD_EHANDLE ),
 };
 
 IMPLEMENT_SAVERESTORE( CRpgRocket, CGrenade )

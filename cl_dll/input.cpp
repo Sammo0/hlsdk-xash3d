@@ -1,4 +1,4 @@
-//========= Copyright © 1996-2002, Valve LLC, All rights reserved. ============
+//========= Copyright (c) 1996-2002, Valve LLC, All rights reserved. ============
 //
 // Purpose: 
 //
@@ -55,7 +55,6 @@ int CL_ButtonBits( int );
 extern cvar_t *in_joystick;
 
 int	in_impulse = 0;
-int	in_cancel = 0;
 
 cvar_t	*m_pitch;
 cvar_t	*m_yaw;
@@ -123,6 +122,10 @@ kbutton_t	in_score;
 kbutton_t	in_break;
 kbutton_t	in_graph;  // Display the netgraph
 
+//Special case for physical crouching
+kbutton_t	in_crouch;
+
+
 typedef struct kblist_s
 {
 	struct kblist_s *next;
@@ -169,7 +172,7 @@ int KB_ConvertString( char *in, char **ppout )
 			*pEnd = '\0';
 
 			pBinding = NULL;
-			if( strlen( binding + 1 ) > 0 )
+			if( binding[1] != '\0' )
 			{
 				// See if there is a binding for binding?
 				pBinding = gEngfuncs.Key_LookupBinding( binding + 1 );
@@ -589,6 +592,17 @@ void IN_DuckUp( void )
 	KeyUp( &in_duck );
 }
 
+void IN_CrouchDown( void )
+{
+	KeyDown( &in_crouch );
+	gHUD.m_Spectator.HandleButtonsDown( IN_DUCK );
+}
+
+void IN_CrouchUp( void )
+{
+	KeyUp( &in_crouch );
+}
+
 void IN_ReloadDown( void )
 {
 	KeyDown( &in_reload );
@@ -628,13 +642,6 @@ void IN_AttackDown( void )
 void IN_AttackUp( void )
 {
 	KeyUp( &in_attack );
-	in_cancel = 0;
-}
-
-// Special handling
-void IN_Cancel( void )
-{
-	in_cancel = 1;
 }
 
 void IN_Impulse( void )
@@ -932,9 +939,9 @@ int CL_ButtonBits( int bResetState )
 		bits |= IN_USE;
 	}
 
-	if( in_cancel )
+	if( in_crouch.state & 3 )
 	{
-		bits |= IN_CANCEL;
+		bits |= IN_CROUCH;
 	}
 
 	if( in_left.state & 3 )
@@ -975,6 +982,11 @@ int CL_ButtonBits( int bResetState )
 	if( in_score.state & 3 )
 	{
 		bits |= IN_SCORE;
+	}
+
+	if( in_speed.state & 1 )
+	{
+		bits |= IN_RUN;
 	}
 
 	// Dead or in intermission? Shore scoreboard, too
@@ -1078,6 +1090,8 @@ void InitInput( void )
 	gEngfuncs.pfnAddCommand( "-jlook", IN_JLookUp );
 	gEngfuncs.pfnAddCommand( "+duck", IN_DuckDown );
 	gEngfuncs.pfnAddCommand( "-duck", IN_DuckUp );
+	gEngfuncs.pfnAddCommand( "+crouch", IN_CrouchDown );
+	gEngfuncs.pfnAddCommand( "-crouch", IN_CrouchUp );
 	gEngfuncs.pfnAddCommand( "+reload", IN_ReloadDown );
 	gEngfuncs.pfnAddCommand( "-reload", IN_ReloadUp );
 	gEngfuncs.pfnAddCommand( "+alt1", IN_Alt1Down );
@@ -1092,11 +1106,21 @@ void InitInput( void )
 	cl_anglespeedkey	= gEngfuncs.pfnRegisterVariable( "cl_anglespeedkey", "0.67", 0 );
 	cl_yawspeed		= gEngfuncs.pfnRegisterVariable( "cl_yawspeed", "210", 0 );
 	cl_pitchspeed		= gEngfuncs.pfnRegisterVariable( "cl_pitchspeed", "225", 0 );
+
+#ifdef VR
+	cl_upspeed		= gEngfuncs.pfnRegisterVariable( "cl_upspeed", "150", 0 );
+	cl_forwardspeed		= gEngfuncs.pfnRegisterVariable( "cl_forwardspeed", "150", FCVAR_ARCHIVE );
+	cl_backspeed		= gEngfuncs.pfnRegisterVariable( "cl_backspeed", "150", FCVAR_ARCHIVE );
+	cl_sidespeed		= gEngfuncs.pfnRegisterVariable( "cl_sidespeed", "150", 0 );
+	cl_movespeedkey		= gEngfuncs.pfnRegisterVariable( "cl_movespeedkey", "3.0", 0 );
+#else
 	cl_upspeed		= gEngfuncs.pfnRegisterVariable( "cl_upspeed", "320", 0 );
 	cl_forwardspeed		= gEngfuncs.pfnRegisterVariable( "cl_forwardspeed", "400", FCVAR_ARCHIVE );
 	cl_backspeed		= gEngfuncs.pfnRegisterVariable( "cl_backspeed", "400", FCVAR_ARCHIVE );
 	cl_sidespeed		= gEngfuncs.pfnRegisterVariable( "cl_sidespeed", "400", 0 );
 	cl_movespeedkey		= gEngfuncs.pfnRegisterVariable( "cl_movespeedkey", "0.3", 0 );
+#endif
+
 	cl_pitchup		= gEngfuncs.pfnRegisterVariable( "cl_pitchup", "89", 0 );
 	cl_pitchdown		= gEngfuncs.pfnRegisterVariable( "cl_pitchdown", "89", 0 );
 
@@ -1108,7 +1132,7 @@ void InitInput( void )
 	m_side			= gEngfuncs.pfnRegisterVariable( "m_side","0.8", FCVAR_ARCHIVE );
 
 	// Initialize third person camera controls.
-	CAM_Init();
+	//CAM_Init();
 	// Initialize inputs
 	IN_Init();
 	// Initialize keyboard

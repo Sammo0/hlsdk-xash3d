@@ -12,10 +12,9 @@
 *   without written permission from Valve LLC.
 *
 ****/
+#pragma once
 #ifndef PM_DEFS_H
 #define PM_DEFS_H
-
-#pragma once
 
 #define MAX_PHYSENTS	600		// Must have room for all entities in the world.
 #define MAX_MOVEENTS	64
@@ -97,6 +96,7 @@ typedef struct playermove_s
 	// player state
 	vec3_t		origin;		// Movement origin.
 	vec3_t		angles;		// Movement view angles.
+	vec3_t		angles2;		// Movement view angles 2 (VR off-hand controller for ladders)
 	vec3_t		oldangles;	// Angles before movement view angles were looked at.
 	vec3_t		velocity;		// Current movement direction.
 	vec3_t		movedir;		// For waterjumping, a forced forward velocity so we can fly over lip of ledge.

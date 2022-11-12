@@ -390,6 +390,8 @@ void EV_HLDM_FireBullets( int idx, float *forward, float *right, float *up, int 
 		vec3_t vecDir, vecEnd;
 		float x, y, z;
 
+		float stabilised = gEngfuncs.pfnGetCvarFloat("vr_weapon_stabilised");
+
 		//We randomize for the Shotgun.
 		if( iBulletType == BULLET_PLAYER_BUCKSHOT )
 		{
@@ -407,9 +409,18 @@ void EV_HLDM_FireBullets( int idx, float *forward, float *right, float *up, int 
 		}//But other guns already have their spread randomized in the synched spread.
 		else
 		{
+			//If stabiliased, reduce the spread
+			float spreadX = flSpreadX;
+			float spreadY = flSpreadY;
+			if (stabilised != 0.0f)
+			{
+				spreadX *= 0.45f;
+				spreadY *= 0.45f;
+			}
+
 			for( i = 0 ; i < 3; i++ )
 			{
-				vecDir[i] = vecDirShooting[i] + flSpreadX * right[i] + flSpreadY * up [i];
+				vecDir[i] = vecDirShooting[i] + spreadX * right[i] + spreadY * up [i];
 				vecEnd[i] = vecSrc[i] + flDistance * vecDir[i];
 			}
 		}
@@ -426,6 +437,31 @@ void EV_HLDM_FireBullets( int idx, float *forward, float *right, float *up, int 
 		gEngfuncs.pEventAPI->EV_PlayerTrace( vecSrc, vecEnd, PM_STUDIO_BOX, -1, &tr );
 
 		tracer = EV_HLDM_CheckTracer( idx, vecSrc, tr.endpos, forward, right, iBulletType, iTracerFreq, tracerCount );
+
+        // haptics
+        if (gMobileEngfuncs) {
+            int leftHanded = (int) CVAR_GET_FLOAT("hand");
+            switch (iBulletType) {
+                default:
+                case BULLET_PLAYER_9MM:
+                    gMobileEngfuncs->pfnVibrate(120, 1 - leftHanded, 0.4);
+                    break;
+                case BULLET_PLAYER_MP5:
+                    gMobileEngfuncs->pfnVibrate(60, 1 - leftHanded, 0.75);
+                    if (stabilised != 0.0f)
+                        gMobileEngfuncs->pfnVibrate(60, leftHanded, 0.5);
+                    break;
+                case BULLET_PLAYER_BUCKSHOT:
+                    gMobileEngfuncs->pfnVibrate(120, 1 - leftHanded, 0.9);
+                    if (stabilised != 0.0f)
+                        gMobileEngfuncs->pfnVibrate(120, leftHanded, 0.75);
+                    break;
+                case BULLET_PLAYER_357:
+                    gMobileEngfuncs->pfnVibrate(120, 1 - leftHanded, 0.8);
+                    break;
+            }
+        }
+
 
 		// do damage, paint decals
 		if( tr.fraction != 1.0 )
@@ -476,9 +512,14 @@ void EV_FireGlock1( event_args_t *args )
 	vec3_t up, right, forward;
 
 	idx = args->entindex;
-	VectorCopy( args->origin, origin );
-	VectorCopy( args->angles, angles );
-	VectorCopy( args->velocity, velocity );
+
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, origin);
+	VectorCopy(viewModel->curstate.angles, angles);
+	angles.x = -angles.x;
+	VectorCopy(viewModel->curstate.velocity, velocity);
 
 	empty = args->bparam1;
 	AngleVectors( angles, forward, right, up );
@@ -521,9 +562,15 @@ void EV_FireGlock2( event_args_t *args )
 	vec3_t up, right, forward;
 
 	idx = args->entindex;
-	VectorCopy( args->origin, origin );
-	VectorCopy( args->angles, angles );
-	VectorCopy( args->velocity, velocity );
+
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, origin);
+	VectorCopy(viewModel->curstate.angles, angles);
+	angles.x = -angles.x;
+	VectorCopy(viewModel->curstate.velocity, velocity);
+
 	int empty = args->bparam1;
 
 	AngleVectors( angles, forward, right, up );
@@ -575,9 +622,14 @@ void EV_FireShotGunDouble( event_args_t *args )
 	//float flSpread = 0.01;
 
 	idx = args->entindex;
-	VectorCopy( args->origin, origin );
-	VectorCopy( args->angles, angles );
-	VectorCopy( args->velocity, velocity );
+
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, origin);
+	VectorCopy(viewModel->curstate.angles, angles);
+	angles.x = -angles.x;
+	VectorCopy(viewModel->curstate.velocity, velocity);
 
 	AngleVectors( angles, forward, right, up );
 
@@ -629,9 +681,14 @@ void EV_FireShotGunSingle( event_args_t *args )
 	//float flSpread = 0.01;
 
 	idx = args->entindex;
-	VectorCopy( args->origin, origin );
-	VectorCopy( args->angles, angles );
-	VectorCopy( args->velocity, velocity );
+
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, origin);
+	VectorCopy(viewModel->curstate.angles, angles);
+	angles.x = -angles.x;
+	VectorCopy(viewModel->curstate.velocity, velocity);
 
 	AngleVectors( angles, forward, right, up );
 
@@ -686,9 +743,14 @@ void EV_FireMP5( event_args_t *args )
 	//float flSpread = 0.01;
 
 	idx = args->entindex;
-	VectorCopy( args->origin, origin );
-	VectorCopy( args->angles, angles );
-	VectorCopy( args->velocity, velocity );
+
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, origin);
+	VectorCopy(viewModel->curstate.angles, angles);
+	angles.x = -angles.x;
+	VectorCopy(viewModel->curstate.velocity, velocity);
 
 	AngleVectors( angles, forward, right, up );
 
@@ -738,7 +800,11 @@ void EV_FireMP52( event_args_t *args )
 	vec3_t origin;
 
 	idx = args->entindex;
-	VectorCopy( args->origin, origin );
+
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, origin);
 
 	if( EV_IsLocal( idx ) )
 	{
@@ -754,6 +820,10 @@ void EV_FireMP52( event_args_t *args )
 	case 1:
 		gEngfuncs.pEventAPI->EV_PlaySound( idx, origin, CHAN_WEAPON, "weapons/glauncher2.wav", 1, ATTN_NORM, 0, 94 + gEngfuncs.pfnRandomLong( 0, 0xf ) );
 		break;
+	}
+
+	if (gMobileEngfuncs) {
+		gMobileEngfuncs->pfnVibrate(100, 1-(int)CVAR_GET_FLOAT("hand"), 0.6);
 	}
 }
 //======================
@@ -776,9 +846,14 @@ void EV_FirePython( event_args_t *args )
 	//float flSpread = 0.01;
 
 	idx = args->entindex;
-	VectorCopy( args->origin, origin );
-	VectorCopy( args->angles, angles );
-	VectorCopy( args->velocity, velocity );
+
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, origin);
+	VectorCopy(viewModel->curstate.angles, angles);
+	angles.x = -angles.x;
+	VectorCopy(viewModel->curstate.velocity, velocity);
 
 	AngleVectors( angles, forward, right, up );
 
@@ -831,9 +906,14 @@ void EV_SpinGauss( event_args_t *args )
 	int pitch;
 
 	idx = args->entindex;
-	VectorCopy( args->origin, origin );
-	VectorCopy( args->angles, angles );
-	VectorCopy( args->velocity, velocity );
+
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, origin);
+	VectorCopy(viewModel->curstate.angles, angles);
+	angles.x = -angles.x;
+	VectorCopy(viewModel->curstate.velocity, velocity);
 
 	pitch = args->iparam1;
 
@@ -882,9 +962,14 @@ void EV_FireGauss( event_args_t *args )
 	vec3_t up, right, forward;
 
 	idx = args->entindex;
-	VectorCopy( args->origin, origin );
-	VectorCopy( args->angles, angles );
-	VectorCopy( args->velocity, velocity );
+
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, origin);
+	VectorCopy(viewModel->curstate.angles, angles);
+	angles.x = -angles.x;
+	VectorCopy(viewModel->curstate.velocity, velocity);
 
 	if( args->bparam2 )
 	{
@@ -912,6 +997,10 @@ void EV_FireGauss( event_args_t *args )
 	}
 
 	gEngfuncs.pEventAPI->EV_PlaySound( idx, origin, CHAN_WEAPON, "weapons/gauss2.wav", 0.5 + flDamage * ( 1.0 / 400.0 ), ATTN_NORM, 0, 85 + gEngfuncs.pfnRandomLong( 0, 0x1f ) );
+
+	if (gMobileEngfuncs) {
+		gMobileEngfuncs->pfnVibrate(120, 1-(int)CVAR_GET_FLOAT("hand"), 0.5);
+	}
 
 	while( flDamage > 10 && nMaxHits > 0 )
 	{
@@ -941,9 +1030,8 @@ void EV_FireGauss( event_args_t *args )
 				EV_MuzzleFlash();
 			}
 			fFirstBeam = 0;
-
-			gEngfuncs.pEfxAPI->R_BeamEntPoint( 
-				idx | 0x1000,
+			// was R_BeamEntPoint(idx | 0x1000, but did somehow not work; m_fPrimaryFire seems also be wrong because we get the wrong color for the beam -> needs further investigation
+			gEngfuncs.pEfxAPI->R_BeamPoints(vecSrc,
 				tr.endpos,
 				m_iBeam,
 				0.1,
@@ -1162,11 +1250,19 @@ void EV_Crowbar( event_args_t *args )
 	vec3_t velocity;
 
 	idx = args->entindex;
-	VectorCopy( args->origin, origin );
+
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, origin);
+	VectorCopy(viewModel->curstate.angles, angles);
+	angles.x = -angles.x;
+	VectorCopy(viewModel->curstate.velocity, velocity);
 	
 	//Play Swing sound
 	gEngfuncs.pEventAPI->EV_PlaySound( idx, origin, CHAN_WEAPON, "weapons/cbar_miss1.wav", 1, ATTN_NORM, 0, PITCH_NORM ); 
 
+	/*
 	if( EV_IsLocal( idx ) )
 	{
 		switch( (g_iSwing++) % 3 )
@@ -1182,6 +1278,7 @@ void EV_Crowbar( event_args_t *args )
 				break;
 		}
 	}
+	 */
 }
 //======================
 //	   CROWBAR END 
@@ -1229,10 +1326,14 @@ void EV_FireCrossbow2( event_args_t *args )
 	vec3_t velocity;
 
 	idx = args->entindex;
-	VectorCopy( args->origin, origin );
-	VectorCopy( args->angles, angles );
 
-	VectorCopy( args->velocity, velocity );
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, origin);
+	VectorCopy(viewModel->curstate.angles, angles);
+	angles.x = -angles.x;
+	VectorCopy(viewModel->curstate.velocity, velocity);
 
 	AngleVectors( angles, forward, right, up );
 
@@ -1258,6 +1359,10 @@ void EV_FireCrossbow2( event_args_t *args )
 	gEngfuncs.pEventAPI->EV_SetSolidPlayers ( idx - 1 );	
 	gEngfuncs.pEventAPI->EV_SetTraceHull( 2 );
 	gEngfuncs.pEventAPI->EV_PlayerTrace( vecSrc, vecEnd, PM_STUDIO_BOX, -1, &tr );
+
+	if (gMobileEngfuncs) {
+		gMobileEngfuncs->pfnVibrate(50, 1-(int)CVAR_GET_FLOAT("hand"), 0.6);
+	}
 
 	//We hit something
 	if( tr.fraction < 1.0 )
@@ -1313,10 +1418,18 @@ void EV_FireCrossbow( event_args_t *args )
 	vec3_t origin;
 
 	idx = args->entindex;
-	VectorCopy( args->origin, origin );
+
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, origin);
 
 	gEngfuncs.pEventAPI->EV_PlaySound( idx, origin, CHAN_WEAPON, "weapons/xbow_fire1.wav", 1, ATTN_NORM, 0, 93 + gEngfuncs.pfnRandomLong( 0, 0xF ) );
 	gEngfuncs.pEventAPI->EV_PlaySound( idx, origin, CHAN_ITEM, "weapons/xbow_reload1.wav", gEngfuncs.pfnRandomFloat( 0.95, 1.0 ), ATTN_NORM, 0, 93 + gEngfuncs.pfnRandomLong( 0, 0xF ) );
+
+	if (gMobileEngfuncs) {
+		gMobileEngfuncs->pfnVibrate(50, 1-(int)CVAR_GET_FLOAT("hand"), 0.4);
+	}
 
 	//Only play the weapon anims if I shot it. 
 	if( EV_IsLocal( idx ) )
@@ -1356,10 +1469,22 @@ void EV_FireRpg( event_args_t *args )
 	vec3_t origin;
 
 	idx = args->entindex;
-	VectorCopy( args->origin, origin );
+
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, origin);
 
 	gEngfuncs.pEventAPI->EV_PlaySound( idx, origin, CHAN_WEAPON, "weapons/rocketfire1.wav", 0.9, ATTN_NORM, 0, PITCH_NORM );
 	gEngfuncs.pEventAPI->EV_PlaySound( idx, origin, CHAN_ITEM, "weapons/glauncher.wav", 0.7, ATTN_NORM, 0, PITCH_NORM );
+
+	if (gMobileEngfuncs) {
+        int leftHanded = (int) CVAR_GET_FLOAT("hand");
+        int stabilised = (int) CVAR_GET_FLOAT("vr_weapon_stabilised");
+		gMobileEngfuncs->pfnVibrate(200, 1-leftHanded, 0.9);
+		if (stabilised)
+            gMobileEngfuncs->pfnVibrate(200, leftHanded, 0.8);
+	}
 
 	//Only play the weapon anims if I shot it. 
 	if( EV_IsLocal( idx ) )
@@ -1415,8 +1540,19 @@ enum EGON_FIREMODE
 
 #define ARRAYSIZE(p)		( sizeof(p) /sizeof(p[0]) )
 
-BEAM *pBeam;
-BEAM *pBeam2;
+BEAM *pBeam = NULL;
+BEAM *pBeam2 = NULL;
+TEMPENTITY *pFlare = NULL;	// Vit_amiN: egon's beam flare
+
+void EV_EgonFlareCallback( struct tempent_s *ent, float frametime, float currenttime )
+{
+	float delta = currenttime - ent->tentOffset.z;	// time past since the last scale
+	if( delta >= ent->tentOffset.y )
+	{
+		ent->entity.curstate.scale += ent->tentOffset.x * delta;
+		ent->tentOffset.z = currenttime;
+	}
+}
 
 void EV_EgonFire( event_args_t *args )
 {
@@ -1424,7 +1560,12 @@ void EV_EgonFire( event_args_t *args )
 	vec3_t origin;
 
 	idx = args->entindex;
-	VectorCopy( args->origin, origin );
+
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, origin);
+
 	//iFireState = args->iparam1;
 	iFireMode = args->iparam2;
 	int iStartup = args->bparam1;
@@ -1435,6 +1576,11 @@ void EV_EgonFire( event_args_t *args )
 			gEngfuncs.pEventAPI->EV_PlaySound( idx, origin, CHAN_WEAPON, EGON_SOUND_STARTUP, 0.98, ATTN_NORM, 0, 125 );
 		else
 			gEngfuncs.pEventAPI->EV_PlaySound( idx, origin, CHAN_WEAPON, EGON_SOUND_STARTUP, 0.9, ATTN_NORM, 0, 100 );
+
+		if (gMobileEngfuncs) {
+			//Vibrate until we say stop
+			gMobileEngfuncs->pfnVibrate(-1, 1-(int)CVAR_GET_FLOAT("hand"), 0.5);
+		}
 	}
 	else
 	{
@@ -1454,7 +1600,7 @@ void EV_EgonFire( event_args_t *args )
 	if( EV_IsLocal( idx ) )
 		gEngfuncs.pEventAPI->EV_WeaponAnimation( g_fireAnims1[gEngfuncs.pfnRandomLong( 0, 3 )], 1 );
 
-	if( iStartup == 1 && EV_IsLocal( idx ) && !pBeam && !pBeam2 && cl_lw->value ) //Adrian: Added the cl_lw check for those lital people that hate weapon prediction.
+	if( iStartup == 1 && EV_IsLocal( idx ) && !( pBeam || pBeam2 || pFlare ) && cl_lw->value ) //Adrian: Added the cl_lw check for those lital people that hate weapon prediction.
 	{
 		vec3_t vecSrc, vecEnd, angles, forward, right, up;
 		pmtrace_t tr;
@@ -1463,9 +1609,9 @@ void EV_EgonFire( event_args_t *args )
 
 		if( pl )
 		{
-			VectorCopy( gHUD.m_vecAngles, angles );
-
-			AngleVectors( angles, forward, right, up );
+			VectorCopy(viewModel->curstate.angles, angles);
+			angles.x = -angles.x;
+            AngleVectors(angles, forward, NULL, NULL);
 
 			EV_GetGunPosition( args, vecSrc, pl->origin );
 
@@ -1484,7 +1630,7 @@ void EV_EgonFire( event_args_t *args )
 
 			gEngfuncs.pEventAPI->EV_PopPMStates();
 
-			int iBeamModelIndex = gEngfuncs.pEventAPI->EV_FindModelIndex( EGON_BEAM_SPRITE );
+/*			int iBeamModelIndex = gEngfuncs.pEventAPI->EV_FindModelIndex( EGON_BEAM_SPRITE );
 
 			float r = 50.0f;
 			float g = 50.0f;
@@ -1502,7 +1648,16 @@ void EV_EgonFire( event_args_t *args )
 				 pBeam->flags |= ( FBEAM_SINENOISE );
 
 			pBeam2 = gEngfuncs.pEfxAPI->R_BeamEntPoint( idx | 0x1000, tr.endpos, iBeamModelIndex, 99999, 5.0, 0.08, 0.7, 25, 0, 0, r, g, b );
+
+			// Vit_amiN: egon beam flare
+			pFlare = gEngfuncs.pEfxAPI->R_TempSprite( tr.endpos, vec3_origin, 1.0, gEngfuncs.pEventAPI->EV_FindModelIndex( EGON_FLARE_SPRITE ), kRenderGlow, kRenderFxNoDissipation, 1.0, 99999, FTENT_SPRCYCLE | FTENT_PERSIST );
+*/
 		}
+	}
+
+	if( pFlare )	// Vit_amiN: store the last mode for EV_EgonStop()
+	{
+		pFlare->tentOffset.x = ( iFireMode == FIRE_WIDE ) ? 1.0f : 0.0f;
 	}
 }
 
@@ -1512,12 +1667,21 @@ void EV_EgonStop( event_args_t *args )
 	vec3_t origin;
 
 	idx = args->entindex;
-	VectorCopy( args->origin, origin );
+
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, origin);
 
 	gEngfuncs.pEventAPI->EV_StopSound( idx, CHAN_STATIC, EGON_SOUND_RUN );
 
 	if( args->iparam1 )
 		 gEngfuncs.pEventAPI->EV_PlaySound( idx, origin, CHAN_WEAPON, EGON_SOUND_OFF, 0.98, ATTN_NORM, 0, 100 );
+
+	if (gMobileEngfuncs) {
+		//we say stop
+		gMobileEngfuncs->pfnVibrate(0.0f, 1-(int)CVAR_GET_FLOAT("hand"), 0.0f);
+	}
 
 	if( EV_IsLocal( idx ) )
 	{
@@ -1531,6 +1695,26 @@ void EV_EgonStop( event_args_t *args )
 		{
 			pBeam2->die = 0.0;
 			pBeam2 = NULL;
+		}
+
+		if( pFlare )	// Vit_amiN: egon beam flare
+		{
+			pFlare->die = gEngfuncs.GetClientTime();
+
+			if( gEngfuncs.GetMaxClients() == 1 || !(pFlare->flags & FTENT_NOMODEL) )
+			{
+				if( pFlare->tentOffset.x != 0.0f )	// true for iFireMode == FIRE_WIDE
+				{
+					pFlare->callback = &EV_EgonFlareCallback;
+					pFlare->fadeSpeed = 2.0;			// fade out will take 0.5 sec
+					pFlare->tentOffset.x = 10.0;		// scaling speed per second
+					pFlare->tentOffset.y = 0.1;			// min time between two scales
+					pFlare->tentOffset.z = pFlare->die;	// the last callback run time
+					pFlare->flags = FTENT_FADEOUT | FTENT_CLIENTCUSTOM;
+				}
+			}
+
+			pFlare = NULL;
 		}
 	}
 }
@@ -1557,8 +1741,12 @@ void EV_HornetGunFire( event_args_t *args )
 	vec3_t origin, angles, vecSrc, forward, right, up;
 
 	idx = args->entindex;
-	VectorCopy( args->origin, origin );
-	VectorCopy( args->angles, angles );
+
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, origin);
+
 	//iFireMode = args->iparam1;
 
 	//Only play the weapon anims if I shot it.
@@ -1567,6 +1755,10 @@ void EV_HornetGunFire( event_args_t *args )
 		V_PunchAxis( 0, gEngfuncs.pfnRandomLong( 0, 2 ) );
 		gEngfuncs.pEventAPI->EV_WeaponAnimation( HGUN_SHOOT, 1 );
 	}
+
+    if (gMobileEngfuncs) {
+        gMobileEngfuncs->pfnVibrate(100, 1-(int)CVAR_GET_FLOAT("hand"), 0.5);
+    }
 
 	switch( gEngfuncs.pfnRandomLong( 0, 2 ) )
 	{
@@ -1610,8 +1802,13 @@ void EV_TripmineFire( event_args_t *args )
 	pmtrace_t tr;
 
 	idx = args->entindex;
-	VectorCopy( args->origin, vecSrc );
-	VectorCopy( args->angles, angles );
+
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, vecSrc);
+	VectorCopy(viewModel->curstate.angles, angles);
+	angles.x = -angles.x;
 
 	AngleVectors( angles, forward, NULL, NULL );
 
@@ -1664,8 +1861,13 @@ void EV_SnarkFire( event_args_t *args )
 	pmtrace_t tr;
 
 	idx = args->entindex;
-	VectorCopy( args->origin, vecSrc );
-	VectorCopy( args->angles, angles );
+
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, vecSrc);
+	VectorCopy(viewModel->curstate.angles, angles);
+	angles.x = -angles.x;
 
 	AngleVectors( angles, forward, NULL, NULL );
 
@@ -1927,7 +2129,10 @@ void EV_TrainPitchAdjust( event_args_t *args )
 
 	idx = args->entindex;
 
-	VectorCopy( args->origin, origin );
+	cl_entity_s* viewModel = gEngfuncs.GetViewModel();
+	if (viewModel == nullptr)
+		return;
+	VectorCopy(viewModel->curstate.origin, origin);
 
 	us_params = (unsigned short)args->iparam1;
 	stop = args->bparam1;

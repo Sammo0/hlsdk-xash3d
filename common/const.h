@@ -12,6 +12,7 @@
 *   without written permission from Valve LLC.
 *
 ****/
+#pragma once
 #ifndef CONST_H
 #define CONST_H
 //
@@ -39,9 +40,12 @@
 #define FL_GRAPHED		(1<<16)	// worldgraph has this ent listed as something that blocks a connection
 
 // UNDONE: Do we need these?
-#define FL_IMMUNE_WATER	(1<<17)
-#define FL_IMMUNE_SLIME	(1<<18)
-#define FL_IMMUNE_LAVA	(1<<19)
+//#define FL_IMMUNE_WATER	(1<<17)
+//#define FL_IMMUNE_SLIME	(1<<18)
+//#define FL_IMMUNE_LAVA	(1<<19)
+
+//VR - Reuse the above flags as they are basically redundant in this engine
+#define FL_HAS_FLASHLIGHT	(1<<17)
 
 #define FL_PROXY		(1<<20)	// This is a spectator proxy
 #define FL_ALWAYSTHINK	(1<<21)	// Brush model flag -- call think every frame regardless of nextthink - ltime (for constantly changing velocity/path)
@@ -113,7 +117,6 @@
 #define EF_NIGHTVISION			256	// player nightvision
 #define EF_SNIPERLASER			512	// sniper laser effect
 #define EF_FIBERCAMERA			1024	// fiber camera
-
 
 #define EF_NOREFLECT		(1<<24)	// Entity won't reflecting in mirrors
 #define EF_REFLECTONLY		(1<<25)	// Entity will be drawing only in mirrors
@@ -657,7 +660,7 @@
 #define IN_FORWARD			(1<<3)
 #define IN_BACK			(1<<4)
 #define IN_USE			(1<<5)
-#define IN_CANCEL			(1<<6)
+#define IN_CROUCH			(1<<6)
 #define IN_LEFT			(1<<7)
 #define IN_RIGHT			(1<<8)
 #define IN_MOVELEFT			(1<<9)
@@ -733,7 +736,7 @@ enum
 };
 
 typedef unsigned int		func_t;
-typedef unsigned int		string_t;
+typedef int		string_t;
 
 typedef unsigned char	byte;
 typedef unsigned short	word;

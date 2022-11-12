@@ -978,9 +978,11 @@ float UTIL_VecToYaw( const Vector &vec )
 
 void UTIL_SetOrigin( entvars_t *pev, const Vector &vecOrigin )
 {
-	edict_t *ent = ENT( pev );
-	if( ent )
-		SET_ORIGIN( ent, vecOrigin );
+	SET_ORIGIN(ENT(pev), vecOrigin);
+	if (CBaseEntity::Instance(pev) && CBaseEntity::Instance(pev)->IsPlayer())
+	{
+		((CBasePlayer*)CBaseEntity::Instance(pev))->ClearClientOriginOffset();
+	}
 }
 
 void UTIL_ParticleEffect( const Vector &vecOrigin, const Vector &vecDirection, ULONG ulColor, ULONG ulCount )
@@ -1005,7 +1007,7 @@ float UTIL_Approach( float target, float value, float speed )
 float UTIL_ApproachAngle( float target, float value, float speed )
 {
 	target = UTIL_AngleMod( target );
-	value = UTIL_AngleMod( target );
+	value = UTIL_AngleMod( value );
 
 	float delta = target - value;
 
@@ -1618,7 +1620,7 @@ void UTIL_CleanSpawnPoint( Vector origin, float dist )
 static int gSizes[FIELD_TYPECOUNT] =
 {
 	sizeof(float),		// FIELD_FLOAT
-	sizeof(int),		// FIELD_STRING
+	sizeof(string_t),		// FIELD_STRING
 	sizeof(void*),		// FIELD_ENTITY
 	sizeof(void*),		// FIELD_CLASSPTR
 	sizeof(void*),		// FIELD_EHANDLE
@@ -1645,7 +1647,7 @@ static int gSizes[FIELD_TYPECOUNT] =
 static int gInputSizes[FIELD_TYPECOUNT] =
 {
 	sizeof(float),		// FIELD_FLOAT
-	sizeof(int),		// FIELD_STRING
+	sizeof(string_t),		// FIELD_STRING
 	sizeof(int),		// FIELD_ENTITY
 	sizeof(int),		// FIELD_CLASSPTR
 	sizeof(int),		// FIELD_EHANDLE
@@ -1972,7 +1974,7 @@ void EntvarsKeyvalue( entvars_t *pev, KeyValueData *pkvd )
 			case FIELD_MODELNAME:
 			case FIELD_SOUNDNAME:
 			case FIELD_STRING:
-				( *(int *)( (char *)pev + pField->fieldOffset ) ) = ALLOC_STRING( pkvd->szValue );
+				( *(string_t *)( (char *)pev + pField->fieldOffset ) ) = ALLOC_STRING( pkvd->szValue );
 				break;
 			case FIELD_TIME:
 			case FIELD_FLOAT:
@@ -2046,7 +2048,7 @@ int CSave::WriteFields( const char *pname, void *pBaseData, TYPEDESCRIPTION *pFi
 		case FIELD_MODELNAME:
 		case FIELD_SOUNDNAME:
 		case FIELD_STRING:
-			WriteString( pTest->fieldName, (int *)pOutputData, pTest->fieldSize );
+			WriteString( pTest->fieldName, (string_t *)pOutputData, pTest->fieldSize );
 			break;
 		case FIELD_CLASSPTR:
 		case FIELD_EVARS:
@@ -2228,15 +2230,15 @@ int CRestore::ReadField( void *pBaseData, TYPEDESCRIPTION *pFields, int fieldCou
 							pString++;
 						}
 						pInputData = pString;
-						if( strlen( (char *)pInputData ) == 0 )
-							*( (int *)pOutputData ) = 0;
+						if( ( (char *)pInputData )[0] == '\0' )
+							*( (string_t *)pOutputData ) = 0;
 						else
 						{
-							int string;
+							string_t string;
 
 							string = ALLOC_STRING( (char *)pInputData );
 
-							*( (int *)pOutputData ) = string;
+							*( (string_t *)pOutputData ) = string;
 
 							if( !FStringNull( string ) && m_precache )
 							{
@@ -2323,7 +2325,7 @@ int CRestore::ReadField( void *pBaseData, TYPEDESCRIPTION *pFields, int fieldCou
 						*( (void**)pOutputData ) = *(void **)pInputData;
 						break;
 					case FIELD_FUNCTION:
-						if( strlen( (char *)pInputData ) == 0 )
+						if( ( (char *)pInputData )[0] == '\0' )
 							*( (void**)pOutputData ) = 0;
 						else
 							*( (void**)pOutputData ) = (void*)FUNCTION_FROM_NAME( (char *)pInputData );

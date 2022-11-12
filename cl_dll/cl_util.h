@@ -15,7 +15,8 @@
 //
 // cl_util.h
 //
-
+#ifndef CL_UTIL_H
+#define CL_UTIL_H
 #include "exportdef.h"
 #include "cvardef.h"
 
@@ -147,8 +148,8 @@ inline void CenterPrint( const char *string )
 inline void PlaySound( const char *szSound, float vol ) { gEngfuncs.pfnPlaySoundByName( szSound, vol ); }
 inline void PlaySound( int iSound, float vol ) { gEngfuncs.pfnPlaySoundByIndex( iSound, vol ); }
 
-#define max(a, b)  (((a) > (b)) ? (a) : (b))
-#define min(a, b)  (((a) < (b)) ? (a) : (b))
+#define Q_max(a, b)  (((a) > (b)) ? (a) : (b))
+#define Q_min(a, b)  (((a) < (b)) ? (a) : (b))
 #define fabs(x)	   ((x) > 0 ? (x) : 0 - (x))
 
 void ScaleColors( int &r, int &g, int &b, int a );
@@ -179,3 +180,14 @@ inline void UnpackRGB( int &r, int &g, int &b, unsigned long ulRGB )\
 }
 
 HSPRITE LoadSprite( const char *pszName );
+
+// Added NormalizeAngles and GetAnglesFromVectors - Max Vollmer, 2017-08-17
+#ifndef EPSILON
+#define EPSILON 0.001f
+#endif
+void NormalizeAngles(Vector &angles);
+void GetAnglesFromVectors(const Vector &forward, const Vector &right, const Vector &up, Vector &angles);
+
+bool HUD_MessageBox( const char *msg );
+bool IsXashFWGS();
+#endif

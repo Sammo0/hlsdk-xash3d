@@ -12,7 +12,7 @@
 *   without written permission from Valve LLC.
 *
 ****/
-
+#pragma once
 #ifndef REF_PARAMS_H
 #define REF_PARAMS_H
 
@@ -21,6 +21,20 @@ typedef struct ref_params_s
 	// output
 	vec3_t		vieworg;
 	vec3_t		viewangles;
+
+#ifdef VR
+	//controllers
+	struct controller_t {
+		int flags;
+		vec3_t org;
+		vec3_t velocity;
+		struct angles_s {
+			vec3_t adjusted;
+			vec3_t unadjusted;
+			vec3_t melee;
+		} angles;
+	} flashlight, weapon;
+#endif
 
 	vec3_t		forward;
 	vec3_t		right;

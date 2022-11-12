@@ -12,6 +12,7 @@
 *   without written permission from Valve LLC.
 *
 ****/
+#pragma once
 #ifndef WEAPONS_H
 #define WEAPONS_H
 
@@ -281,6 +282,31 @@ public:
 	// int		m_iIdSecondary;										// Unique Id for secondary ammo
 };
 
+
+class CLaserSpot : public CBaseEntity
+{
+    void Spawn( void );
+    void Precache( void );
+
+    int	ObjectCaps( void ) { return FCAP_DONT_SAVE; }
+
+public:
+    void Suspend( float flSuspendTime );
+    void EXPORT Revive( void );
+
+    static CLaserSpot *CreateSpot( void );
+};
+
+class CLaserSight : public CBeam
+{
+	void Spawn( void );
+	int	ObjectCaps( void ) { return FCAP_DONT_SAVE; }
+
+public:
+	static CLaserSight *CreateLaserSight( void );
+};
+
+
 // inventory items that 
 class CBasePlayerWeapon : public CBasePlayerItem
 {
@@ -322,7 +348,7 @@ public:
 	// called by CBasePlayerWeapons ItemPostFrame()
 	virtual void PrimaryAttack( void ) { return; }				// do "+ATTACK"
 	virtual void SecondaryAttack( void ) { return; }			// do "+ATTACK2"
-	virtual void Reload( void ) { return; }						// do "+RELOAD"
+	virtual void Reload( void );								// do "+RELOAD"
 	virtual void WeaponTick() {}				// Always called at beginning of ItemPostFrame. - Solokiller
 	virtual void WeaponIdle( void ) { return; }					// called when no buttons pressed
 	virtual int UpdateClientData( CBasePlayer *pPlayer );		// sends hud info to client dll, if things have changed
@@ -331,7 +357,10 @@ public:
 	virtual void Holster( int skiplocal = 0 );
 	virtual BOOL UseDecrement( void ) { return FALSE; };
 
-	int	PrimaryAmmoIndex(); 
+	virtual void MakeLaser( void );
+	virtual void KillLaser( void );
+
+	int	PrimaryAmmoIndex();
 	int	SecondaryAmmoIndex(); 
 
 	void PrintState( void );
@@ -356,6 +385,9 @@ public:
 	// hle time creep vars
 	float	m_flPrevPrimaryAttack;
 	float	m_flLastFireTime;
+
+	CLaserSight 	*m_pLaser;
+    CLaserSpot 		*m_pLaserSpot;
 };
 
 class CBasePlayerAmmo : public CBaseEntity
@@ -451,7 +483,7 @@ public:
 
 	CBasePlayerItem	*m_rgpPlayerItems[MAX_ITEM_TYPES];// one slot for each 
 
-	int m_rgiszAmmo[MAX_AMMO_SLOTS];// ammo names
+	string_t m_rgiszAmmo[MAX_AMMO_SLOTS];// ammo names
 	int	m_rgAmmo[MAX_AMMO_SLOTS];// ammo quantities
 
 	int m_cAmmoTypes;// how many ammo types packed into this box (if packed by a level designer)
@@ -478,6 +510,10 @@ public:
 	void Reload( void );
 	void WeaponIdle( void );
 
+	void MakeBeam( void );
+	void KillBeam( void );
+
+
 	virtual BOOL UseDecrement( void )
 	{ 
 #if defined( CLIENT_WEAPONS )
@@ -500,13 +536,12 @@ public:
 	void Spawn( void );
 	void Precache( void );
 	int iItemSlot( void ) { return 1; }
-	void EXPORT SwingAgain( void );
-	void EXPORT Smack( void );
-	int GetItemInfo( ItemInfo *p );
-	int AddToPlayer( CBasePlayer *pPlayer );
 
-	void PrimaryAttack( void );
-	int Swing( int fFirst );
+	int GetItemInfo( ItemInfo *p );
+
+	virtual void ItemPostFrame(void);
+
+	void CheckSmack(float speed);
 	BOOL Deploy( void );
 	void Holster( int skiplocal = 0 );
 #ifdef CROWBAR_IDLE_ANIM
@@ -514,6 +549,8 @@ public:
 #endif
 	int m_iSwing;
 	TraceResult m_trHit;
+
+	void MakeLaser();
 
 	virtual BOOL UseDecrement( void )
 	{ 
@@ -525,6 +562,17 @@ public:
 	}
 private:
 	unsigned short m_usCrowbar;
+
+#ifndef CLIENT_DLL
+	// Stuff for VR swinging
+	bool playedWooshSound = false;
+	float lastWooshSoundTime = 0;
+	float hitCount = 0;
+	bool HasNotHitThisEntityThisSwing(CBaseEntity *pEntity);
+	void RememberHasHitThisEntityThisSwing(CBaseEntity *pEntity);
+	void ClearEntitiesHitThisSwing();
+	EHANDLE hitEntities[128];	// TODO: Use std::unordered_set
+#endif
 };
 
 class CPython : public CBasePlayerWeapon
@@ -543,7 +591,7 @@ public:
 	void WeaponIdle( void );
 	float m_flSoundDelay;
 
-	BOOL m_fInZoom;// don't save this. 
+	//BOOL m_fInZoom;// don't save this.
 
 	virtual BOOL UseDecrement( void )
 	{
@@ -663,20 +711,6 @@ private:
 	unsigned short m_usSingleFire;
 };
 
-class CLaserSpot : public CBaseEntity
-{
-	void Spawn( void );
-	void Precache( void );
-
-	int	ObjectCaps( void ) { return FCAP_DONT_SAVE; }
-
-public:
-	void Suspend( float flSuspendTime );
-	void EXPORT Revive( void );
-
-	static CLaserSpot *CreateSpot( void );
-};
-
 class CRpg : public CBasePlayerWeapon
 {
 public:
@@ -735,7 +769,7 @@ public:
 
 	int m_iTrail;
 	float m_flIgniteTime;
-	EHANDLE m_hLauncher; // handle back to the launcher that fired me. 
+    CRpg *m_pLauncher; // pointer back to the launcher that fired me.
 };
 
 class CGauss : public CBasePlayerWeapon
@@ -810,6 +844,7 @@ public:
 	void EndAttack( void );
 	void Attack( void );
 	void PrimaryAttack( void );
+	void SecondaryAttack( void );
 	void WeaponIdle( void );
 
 	float m_flAmmoUseTime;// since we use < 1 point of ammo per update, we subtract ammo on a timer.
@@ -904,6 +939,8 @@ public:
 	void Holster( int skiplocal = 0 );
 	void WeaponIdle( void );
 
+	void MakeLaser() { KillLaser(); }
+
 	virtual BOOL UseDecrement( void )
 	{ 
 #if defined( CLIENT_WEAPONS )
@@ -912,6 +949,10 @@ public:
 		return FALSE;
 #endif
 	}
+
+private:
+	Vector m_WeaponPositions[4];
+	float m_WeaponPositionTimestamps[4];
 };
 
 class CSatchel : public CBasePlayerWeapon
@@ -934,9 +975,12 @@ public:
 	BOOL Deploy( void );
 	BOOL IsUseable( void );
 
+	void MakeLaser() { KillLaser(); }
+
 	void Holster( int skiplocal = 0 );
 	void WeaponIdle( void );
-	void Throw( void );
+	void PreThrow( void );
+	void Throw( Vector throwVelocity );
 
 	virtual BOOL UseDecrement( void )
 	{ 
@@ -946,6 +990,10 @@ public:
 		return FALSE;
 #endif
 	}
+
+private:
+    Vector m_WeaponPositions[4];
+    float m_WeaponPositionTimestamps[4];
 };
 
 class CTripmine : public CBasePlayerWeapon
@@ -966,6 +1014,8 @@ public:
 	BOOL Deploy( void );
 	void Holster( int skiplocal = 0 );
 	void WeaponIdle( void );
+
+	void MakeLaser() { KillLaser(); }
 
 	virtual BOOL UseDecrement( void )
 	{ 
@@ -993,7 +1043,11 @@ public:
 	BOOL Deploy( void );
 	void Holster( int skiplocal = 0 );
 	void WeaponIdle( void );
-	int m_fJustThrown;
+
+	void MakeLaser() { KillLaser(); }
+
+    void PreThrow();
+    void Throw(Vector throwVelocity);
 
 	virtual BOOL UseDecrement( void )
 	{
@@ -1006,6 +1060,10 @@ public:
 
 private:
 	unsigned short m_usSnarkFire;
+
+private:
+    Vector m_WeaponPositions[4];
+    float m_WeaponPositionTimestamps[4];
 };
 
 class CDisplacer : public CBasePlayerWeapon

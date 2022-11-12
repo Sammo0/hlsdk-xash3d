@@ -28,6 +28,8 @@
 #include "demo.h"
 #include "demo_api.h"
 
+#include "vr_renderer.h"
+
 cvar_t *hud_textmode;
 float g_hud_text_color[3];
 
@@ -191,7 +193,10 @@ void CHud::Init( void )
 	m_iFOV = 0;
 
 	CVAR_CREATE( "zoom_sensitivity_ratio", "1.2", 0 );
+
+	//Start at 90, this will be updated according the the HMD's FOV
 	default_fov = CVAR_CREATE( "default_fov", "90", 0 );
+
 	m_pCvarStealMouse = CVAR_CREATE( "hud_capturemouse", "1", FCVAR_ARCHIVE );
 	m_pCvarDraw = CVAR_CREATE( "hud_draw", "1", FCVAR_ARCHIVE );
 	cl_lw = gEngfuncs.pfnGetCvarPointer( "cl_lw" );
@@ -221,6 +226,7 @@ void CHud::Init( void )
 	m_Spectator.Init();
 	m_Geiger.Init();
 	m_Train.Init();
+	m_Stealth.Init();
 	m_Battery.Init();
 	m_Flash.Init();
 	m_Message.Init();
@@ -233,7 +239,9 @@ void CHud::Init( void )
 	m_Scoreboard.Init();
 
 	m_Menu.Init();
-	
+
+    gVRRenderer.VidInit();
+
 	MsgFunc_ResetHUD( 0, 0, NULL );
 }
 
@@ -381,6 +389,18 @@ void CHud::VidInit( void )
 	// assumption: number_1, number_2, etc, are all listed and loaded sequentially
 	m_HUD_number_0 = GetSpriteIndex( "number_0" );
 
+	if( m_HUD_number_0 == -1 )
+	{
+		const char *msg = "There is something wrong with your game data! Please, reinstall\n";
+
+		if( HUD_MessageBox( msg ) )
+		{
+			gEngfuncs.pfnClientCmd( "quit\n" );
+		}
+
+		return;
+	}
+
 	m_iFontHeight = m_rgrcRects[m_HUD_number_0].bottom - m_rgrcRects[m_HUD_number_0].top;
 
 	m_Ammo.VidInit();
@@ -388,6 +408,7 @@ void CHud::VidInit( void )
 	m_Spectator.VidInit();
 	m_Geiger.VidInit();
 	m_Train.VidInit();
+	m_Stealth.VidInit();
 	m_Battery.VidInit();
 	m_Flash.VidInit();
 	m_Message.VidInit();
@@ -413,6 +434,18 @@ int CHud::MsgFunc_Logo( const char *pszName,  int iSize, void *pbuf )
 }
 
 float g_lastFOV = 0.0;
+
+int CHudBase::GetStereoDepthOffset()
+{
+	int eye = CVAR_GET_FLOAT("vr_stereo_side");
+
+	//Check for mono mode
+	if (eye > 1)
+		return 0;
+
+	return (int)( ( eye * -2.0f ) + 1.0f) * (ScreenWidth / 36.0f);
+}
+
 
 /*
 ============
@@ -513,10 +546,6 @@ int CHud::MsgFunc_SetFOV( const char *pszName,  int iSize, void *pbuf )
 	int newfov = READ_BYTE();
 	int def_fov = CVAR_GET_FLOAT( "default_fov" );
 
-	//Weapon prediction already takes care of changing the fog. ( g_lastFOV ).
-	if( cl_lw && cl_lw->value )
-		return 1;
-
 	g_lastFOV = newfov;
 
 	if( newfov == 0 )
@@ -526,20 +555,6 @@ int CHud::MsgFunc_SetFOV( const char *pszName,  int iSize, void *pbuf )
 	else
 	{
 		m_iFOV = newfov;
-	}
-
-	// the clients fov is actually set in the client data update section of the hud
-
-	// Set a new sensitivity
-	if( m_iFOV == def_fov )
-	{  
-		// reset to saved sensitivity
-		m_flMouseSensitivity = 0;
-	}
-	else
-	{  
-		// set a new sensitivity that is proportional to the change from the FOV default
-		m_flMouseSensitivity = sensitivity->value * ((float)newfov / (float)def_fov) * CVAR_GET_FLOAT("zoom_sensitivity_ratio");
 	}
 
 	return 1;
@@ -575,7 +590,3 @@ void CHud::AddHudElem( CHudBase *phudelem )
 	ptemp->pNext = pdl;
 }
 
-float CHud::GetSensitivity( void )
-{
-	return m_flMouseSensitivity;
-}

@@ -48,9 +48,9 @@ playermove_t *pmove = NULL;
 #define TIME_TO_DUCK		0.4
 #define VEC_DUCK_HULL_MIN	-18
 #define VEC_DUCK_HULL_MAX	18
-#define VEC_DUCK_VIEW		12
+#define VEC_DUCK_VIEW		10
 #define PM_DEAD_VIEWHEIGHT	-8
-#define MAX_CLIMB_SPEED		200
+#define DEFAULT_CLIMB_SPEED		120
 #define STUCK_MOVEUP		1
 #define STUCK_MOVEDOWN		-1
 #define VEC_HULL_MIN		-36
@@ -92,6 +92,7 @@ playermove_t *pmove = NULL;
 #define PLAYER_LONGJUMP_SPEED		350 // how fast we longjump
 
 #define PLAYER_DUCKING_MULTIPLIER	0.333
+#define PLAYER_RUNNING_MULTIPLIER	3.0
 
 // double to float warning
 #ifdef _MSC_VER
@@ -168,24 +169,23 @@ void PM_InitTextureTypes()
 	char buffer[512];
 	int i, j;
 	byte *pMemFile;
-	int fileSize, filePos;
+	int fileSize, filePos = 0;
 	static qboolean bTextureTypeInit = false;
 
 	if( bTextureTypeInit )
 		return;
 
-	memset(&( grgszTextureName[0][0] ), 0, CTEXTURESMAX * CBTEXTURENAMEMAX );
-	memset( grgchTextureType, 0, CTEXTURESMAX );
+	memset(&( grgszTextureName[0][0] ), 0, sizeof( grgszTextureName ) );
+	memset( grgchTextureType, 0, sizeof( grgchTextureType ) );
 
 	gcTextures = 0;
 
-	fileSize = pmove->COM_FileSize( "sound/materials.txt" );
-	pMemFile = pmove->COM_LoadFile( "sound/materials.txt", 5, NULL );
+	pMemFile = pmove->COM_LoadFile( "sound/materials.txt", 5, &fileSize );
 	if( !pMemFile )
 		return;
 
-	memset( buffer, 0, 512 );
-	filePos = 0;
+	memset( buffer, 0, sizeof( buffer ) );
+
 	// for each line in the file...
 	while( pmove->memfgets( pMemFile, fileSize, &filePos, buffer, 511 ) != NULL && (gcTextures < CTEXTURESMAX ) )
 	{
@@ -595,7 +595,7 @@ void PM_UpdateStepSound( void )
 	// If we're on a ladder or on the ground, and we're moving fast enough,
 	//  play step sound.  Also, if pmove->flTimeStepSound is zero, get the new
 	//  sound right away - we just started moving in new level.
-	if( ( fLadder || ( pmove->onground != -1 ) ) && ( Length( pmove->velocity ) > 0.0 ) && ( speed >= velwalk || !pmove->flTimeStepSound ) )
+	if( ( fLadder || ( pmove->onground != -1 ) ) && ( Length( pmove->velocity ) > 20.0f ) && ( speed >= velwalk || !pmove->flTimeStepSound ) )
 	{
 		fWalking = speed < velrun;		
 
@@ -1750,7 +1750,7 @@ int PM_CheckStuck( void )
 
 	// If player is flailing while stuck in another player ( should never happen ), then see
 	//  if we can't "unstick" them forceably.
-	if( pmove->cmd.buttons & ( IN_JUMP | IN_DUCK | IN_ATTACK ) && ( pmove->physents[hitent].player != 0 ) )
+	if( pmove->cmd.buttons & ( IN_JUMP | IN_DUCK | IN_CROUCH | IN_ATTACK ) && ( pmove->physents[hitent].player != 0 ) )
 	{
 		float x, y, z;
 		float xystep = 8.0;
@@ -1994,6 +1994,11 @@ void PM_UnDuck( void )
 	}
 }
 
+int duckTriggered()
+{
+	return (pmove->cmd.buttons & IN_DUCK) | (pmove->cmd.buttons & IN_CROUCH);
+}
+
 void PM_Duck( void )
 {
 	int i;
@@ -2008,11 +2013,58 @@ void PM_Duck( void )
 
 	if( pmove->cmd.buttons & IN_DUCK )
 	{
+		// If we are in the water most of the way...
+		if( pmove->waterlevel >= 2 )
+		{
+			// we're swimming
+			pmove->onground = -1;
+
+			if( pmove->watertype == CONTENTS_WATER )	// We move down a certain amount
+				pmove->velocity[2] = -100;
+			else if( pmove->watertype == CONTENTS_SLIME )
+				pmove->velocity[2] = -80;
+			else // LAVA
+				pmove->velocity[2] = -50;
+
+			// play swiming sound
+			if( pmove->flSwimTime <= 0 )
+			{
+				// Don't play sound again for 1 second
+				pmove->flSwimTime = 1000;
+				switch( pmove->RandomLong( 0, 3 ) )
+				{
+					case 0:
+						pmove->PM_PlaySound( CHAN_BODY, "player/pl_wade1.wav", 1, ATTN_NORM, 0, PITCH_NORM );
+						break;
+					case 1:
+						pmove->PM_PlaySound( CHAN_BODY, "player/pl_wade2.wav", 1, ATTN_NORM, 0, PITCH_NORM );
+						break;
+					case 2:
+						pmove->PM_PlaySound( CHAN_BODY, "player/pl_wade3.wav", 1, ATTN_NORM, 0, PITCH_NORM );
+						break;
+					case 3:
+						pmove->PM_PlaySound( CHAN_BODY, "player/pl_wade4.wav", 1, ATTN_NORM, 0, PITCH_NORM );
+						break;
+				}
+			}
+
+			return;
+		}
+
 		pmove->oldbuttons |= IN_DUCK;
 	}
 	else
 	{
 		pmove->oldbuttons &= ~IN_DUCK;
+	}
+
+	if( pmove->cmd.buttons & IN_CROUCH )
+	{
+		pmove->oldbuttons |= IN_CROUCH;
+	}
+	else
+	{
+		pmove->oldbuttons &= ~IN_CROUCH;
 	}
 
 	// Prevent ducking if the iuser3 variable is set
@@ -2033,11 +2085,12 @@ void PM_Duck( void )
 		pmove->cmd.upmove *= PLAYER_DUCKING_MULTIPLIER;
 	}
 
-	if( ( pmove->cmd.buttons & IN_DUCK ) || ( pmove->bInDuck ) || ( pmove->flags & FL_DUCKING ) )
+	if(duckTriggered() || ( pmove->bInDuck ) || ( pmove->flags & FL_DUCKING ) )
 	{
-		if( pmove->cmd.buttons & IN_DUCK )
+		if(duckTriggered() )
 		{
-			if( (nButtonPressed & IN_DUCK ) && !( pmove->flags & FL_DUCKING ) )
+			if( ( (nButtonPressed & IN_DUCK ) || (nButtonPressed & IN_CROUCH ))
+				&& !( pmove->flags & FL_DUCKING ) )
 			{
 				// Use 1 second so super long jump will work
 				pmove->flDuckTime = 1000;
@@ -2048,16 +2101,24 @@ void PM_Duck( void )
 
 			if( pmove->bInDuck )
 			{
-				// Finish ducking immediately if duck time is over or not on ground
-				if( ( (float)pmove->flDuckTime / 1000.0 <= ( 1.0 - TIME_TO_DUCK ) ) || ( pmove->onground == -1 ) )
+				// Finish ducking immediately if duck time is over or not on ground or player is crouching
+				if( ( (float)pmove->flDuckTime / 1000.0 <= ( 1.0 - TIME_TO_DUCK ) ) || ( pmove->onground == -1 )  || (nButtonPressed & IN_CROUCH ) )
 				{
 					pmove->usehull = 1;
-					pmove->view_ofs[2] = VEC_DUCK_VIEW;
+					if ( pmove->cmd.buttons & IN_DUCK )
+					{
+						pmove->view_ofs[2] = VEC_DUCK_VIEW;
+					}
+					else
+                    {
+                        pmove->view_ofs[2] = VEC_VIEW - VEC_DUCK_HULL_MIN;
+                    }
+
 					pmove->flags |= FL_DUCKING;
 					pmove->bInDuck = false;
 
 					// HACKHACK - Fudge for collision bug - no time to fix this properly
-					if( pmove->onground != -1 )
+					if( pmove->onground != -1)
 					{
 						for( i = 0; i < 3; i++ )
 						{
@@ -2070,7 +2131,7 @@ void PM_Duck( void )
 						PM_CatagorizePosition();
 					}
 				}
-				else
+				else if ( pmove->cmd.buttons & IN_DUCK )
 				{
 					float fMore = VEC_DUCK_HULL_MIN - VEC_HULL_MIN;
 
@@ -2121,24 +2182,30 @@ void PM_LadderMove( physent_t *pLadder )
 	{
 		float forward = 0, right = 0;
 		vec3_t vpn, v_right;
-		float flSpeed = MAX_CLIMB_SPEED;
+		float flSpeed = DEFAULT_CLIMB_SPEED;
+
+		if( pmove->flags & FL_DUCKING ) {
+            //Because overrall speed affects ability to start climbing a ladder only reduce the speed when ducked and actually off the floor
+		    if (!onFloor)
+                flSpeed *= PLAYER_DUCKING_MULTIPLIER;
+        }
+		else if( pmove->cmd.buttons & IN_RUN ) // for ladders, don't allow duck and run at the same time
+			flSpeed *= PLAYER_RUNNING_MULTIPLIER;
 
 		// they shouldn't be able to move faster than their maxspeed
 		if( flSpeed > pmove->maxspeed )
 			flSpeed = pmove->maxspeed;
 
-		AngleVectors( pmove->angles, vpn, v_right, NULL );
+		AngleVectors( pmove->angles2, vpn, v_right, NULL );
 
-		if( pmove->flags & FL_DUCKING )
-			flSpeed *= PLAYER_DUCKING_MULTIPLIER;
 		if( pmove->cmd.buttons & IN_BACK )
 			forward -= flSpeed;
 		if( pmove->cmd.buttons & IN_FORWARD )
 			forward += flSpeed;
 		if( pmove->cmd.buttons & IN_MOVELEFT )
-			right -= flSpeed;
+			right -= (flSpeed / 3.0f);
 		if( pmove->cmd.buttons & IN_MOVERIGHT )
-			right += flSpeed;
+			right += (flSpeed / 3.0f);
 
 		if( pmove->cmd.buttons & IN_JUMP )
 		{
@@ -2184,7 +2251,7 @@ void PM_LadderMove( physent_t *pLadder )
 				VectorMA( lateral, -normal, tmp, pmove->velocity );
 				if( onFloor && normal > 0 )	// On ground moving away from the ladder
 				{
-					VectorMA( pmove->velocity, MAX_CLIMB_SPEED, trace.plane.normal, pmove->velocity );
+					VectorMA( pmove->velocity, DEFAULT_CLIMB_SPEED, trace.plane.normal, pmove->velocity );
 				}
 				//pev->velocity = lateral - ( CrossProduct( trace.vecPlaneNormal, perp ) * normal );
 			}
@@ -2835,7 +2902,6 @@ void PM_CheckParamters( void )
 {
 	float spd;
 	float maxspeed;
-	vec3_t v_angle;
 
 	spd = ( pmove->cmd.forwardmove * pmove->cmd.forwardmove ) + ( pmove->cmd.sidemove * pmove->cmd.sidemove ) +
 		( pmove->cmd.upmove * pmove->cmd.upmove );
@@ -2864,6 +2930,9 @@ void PM_CheckParamters( void )
 
 	PM_DropPunchAngle( pmove->punchangle );
 
+	VectorCopy(pmove->cmd.viewangles, pmove->angles);
+
+	/*
 	// Take angles from command.
 	if( !pmove->dead )
 	{
@@ -2880,12 +2949,13 @@ void PM_CheckParamters( void )
 		VectorCopy( pmove->oldangles, pmove->angles );
 	}
 
+
 	// Set dead player view_offset
 	if( pmove->dead )
 	{
 		pmove->view_ofs[2] = PM_DEAD_VIEWHEIGHT;
 	}
-
+*/
 	// Adjust client view angles to match values used on server.
 	if( pmove->angles[YAW] > 180.0f )
 	{
@@ -3312,8 +3382,8 @@ void PM_Move( struct playermove_s *ppmove, int server )
 		pmove->flags &= ~FL_ONGROUND;
 	}
 
-	// In single player, reset friction after each movement to FrictionModifier Triggers work still.
-	if( !pmove->multiplayer && ( pmove->movetype == MOVETYPE_WALK ) )
+	// Reset friction after each movement to FrictionModifier Triggers work still.
+	if( pmove->movetype == MOVETYPE_WALK )
 	{
 		pmove->friction = 1.0f;
 	}

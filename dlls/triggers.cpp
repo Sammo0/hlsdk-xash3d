@@ -115,7 +115,7 @@ public:
 	static TYPEDESCRIPTION m_SaveData[];
 
 private:
-	int m_globalstate;
+	string_t m_globalstate;
 	USE_TYPE triggerType;
 };
 
@@ -268,10 +268,10 @@ public:
 
 	static TYPEDESCRIPTION m_SaveData[];
 
-	int m_cTargets;	// the total number of targets in this manager's fire list.
+	int m_cTargets; // the total number of targets in this manager's fire list.
 	int m_index;	// Current target
 	float m_startTime;// Time we started firing
-	int m_iTargetName[MAX_MULTI_TARGETS];// list if indexes into global string array
+	string_t m_iTargetName[MAX_MULTI_TARGETS];// list if indexes into global string array
 	float m_flTargetDelay[MAX_MULTI_TARGETS];// delay (in seconds) from time of manager fire to target fire
 private:
 	inline BOOL IsClone( void ) { return ( pev->spawnflags & SF_MULTIMAN_CLONE ) ? TRUE : FALSE; }
@@ -1159,7 +1159,7 @@ void CBaseTrigger::ActivateMultiTrigger( CBaseEntity *pActivator )
 	if( pev->nextthink > gpGlobals->time )
 		return;         // still waiting for reset time
 
-	if( !UTIL_IsMasterTriggered( m_sMaster,pActivator ) )
+	if( !UTIL_IsMasterTriggered( m_sMaster, pActivator ) )
 		return;
 
 	if( FClassnameIs( pev, "trigger_secret" ) )
@@ -1226,7 +1226,7 @@ void CBaseTrigger::CounterUse( CBaseEntity *pActivator, CBaseEntity *pCaller, US
 
 	BOOL fTellActivator =
 		( m_hActivator != 0 ) &&
-		FClassnameIs( m_hActivator->pev, "player" ) &&
+		m_hActivator->IsPlayer() &&
 		!FBitSet( pev->spawnflags, SPAWNFLAG_NOMESSAGE );
 	if( m_cTriggersLeft != 0 )
 	{
@@ -1358,7 +1358,7 @@ public:
 
 	char m_szMapName[cchMapNameMost];		// trigger_changelevel only:  next map
 	char m_szLandmarkName[cchMapNameMost];		// trigger_changelevel only:  landmark on next map
-	int m_changeTarget;
+	string_t m_changeTarget;
 	float m_changeTargetDelay;
 };
 
@@ -1534,7 +1534,7 @@ void CChangeLevel::ChangeLevelNow( CBaseEntity *pActivator )
 //
 void CChangeLevel::TouchChangeLevel( CBaseEntity *pOther )
 {
-	if( !FClassnameIs( pOther->pev, "player" ) )
+	if( !pOther->IsPlayer() )
 		return;
 
 	ChangeLevelNow( pOther );
@@ -2089,6 +2089,7 @@ void CTriggerPlayerFreeze::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, U
 		pActivator = CBaseEntity::Instance( g_engfuncs.pfnPEntityOfEntIndex( 1 ) );
 
 	if( pActivator->pev->flags & FL_FROZEN )
+
 		( (CBasePlayer *)pActivator )->EnableControl( TRUE );
 	else
 		( (CBasePlayer *)pActivator )->EnableControl( FALSE );
@@ -2584,7 +2585,7 @@ public:
 	static TYPEDESCRIPTION m_SaveData[];
 
 private:
-	int m_iszNewTarget;
+	string_t m_iszNewTarget;
 };
 
 LINK_ENTITY_TO_CLASS( trigger_changetarget, CTriggerChangeTarget )
@@ -2647,7 +2648,7 @@ public:
 	EHANDLE m_hPlayer;
 	EHANDLE m_hTarget;
 	CBaseEntity *m_pentPath;
-	int m_sPath;
+	string_t m_sPath;
 	float m_flWait;
 	float m_flReturnTime;
 	float m_flStopTime;

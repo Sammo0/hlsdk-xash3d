@@ -116,12 +116,15 @@ BOOL CPython::Deploy()
 
 void CPython::Holster( int skiplocal /* = 0 */ )
 {
+	KillLaser();
+
 	m_fInReload = FALSE;// cancel any reload in progress.
 
+			/*
 	if( m_fInZoom )
 	{
 		SecondaryAttack();
-	}
+	}*/
 
 	m_pPlayer->m_flNextAttack = UTIL_WeaponTimeBase() + 1.0;
 	m_flTimeWeaponIdle = UTIL_WeaponTimeBase() + UTIL_SharedRandomFloat( m_pPlayer->random_seed, 10, 15 );
@@ -139,6 +142,7 @@ void CPython::SecondaryAttack( void )
 		return;
 	}
 
+	/*
 	if( m_pPlayer->pev->fov != 0 )
 	{
 		m_fInZoom = FALSE;
@@ -149,6 +153,7 @@ void CPython::SecondaryAttack( void )
 		m_fInZoom = TRUE;
 		m_pPlayer->pev->fov = m_pPlayer->m_iFOV = 40;
 	}
+	 */
 
 	m_flNextSecondaryAttack = UTIL_WeaponTimeBase() + 0.5;
 }
@@ -156,7 +161,7 @@ void CPython::SecondaryAttack( void )
 void CPython::PrimaryAttack()
 {
 	// don't fire underwater
-	if( m_pPlayer->pev->waterlevel == 3 )
+	if( m_pPlayer->IsWeaponUnderWater() )
 	{
 		PlayEmptySound();
 		m_flNextPrimaryAttack = 0.15;
@@ -186,7 +191,7 @@ void CPython::PrimaryAttack()
 	// player "shoot" animation
 	m_pPlayer->SetAnimation( PLAYER_ATTACK1 );
 
-	UTIL_MakeVectors( m_pPlayer->pev->v_angle + m_pPlayer->pev->punchangle );
+	UTIL_MakeVectors( m_pPlayer->GetWeaponViewAngles() );
 
 	Vector vecSrc = m_pPlayer->GetGunPosition();
 	Vector vecAiming = m_pPlayer->GetAutoaimVector( AUTOAIM_10DEGREES );
@@ -212,12 +217,14 @@ void CPython::PrimaryAttack()
 
 void CPython::Reload( void )
 {
+	CBasePlayerWeapon::Reload();
+
 	if( m_pPlayer->m_rgAmmo[m_iPrimaryAmmoType] <= 0 || m_iClip == PYTHON_MAX_CLIP )
 		return;
 
 	if( m_pPlayer->pev->fov != 0 )
 	{
-		m_fInZoom = FALSE;
+		//m_fInZoom = FALSE;
 		m_pPlayer->pev->fov = m_pPlayer->m_iFOV = 0;  // 0 means reset to default fov
 	}
 
